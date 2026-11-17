@@ -175,6 +175,13 @@ function formatPostedDateTime(isoStr) {
   });
 }
 
+function formatFoundDateTimeLabel(item) {
+  const datePart = item.foundDate || "";
+  const timePart = item.timeUnknown ? "時間不明" : (item.foundTime || "時間不明");
+  if (datePart && timePart) return `${datePart} ${timePart}`;
+  return datePart || timePart || "未記入";
+}
+
 function getExtension(name = "") {
   return name.split(".").pop()?.toLowerCase() || "";
 }
@@ -322,11 +329,15 @@ function toNoticeRow(notice) {
 }
 
 function mapLostItemRow(row) {
+  const rawTime = row.found_time || "";
+  const isTimeUnknown = rawTime === "時間不明";
   return {
     id: row.id,
     name: row.name || "",
     foundLocation: row.found_location || "",
-    foundTime: row.found_time || "",
+    foundDate: row.found_date || formatDateKey(new Date(row.created_at || Date.now())),
+    foundTime: isTimeUnknown ? "" : rawTime,
+    timeUnknown: isTimeUnknown,
     finder: row.finder || CURRENT_USER_NAME,
     storageType: row.storage_type || "警備本部",
     storageOther: row.storage_other || "",
@@ -342,7 +353,8 @@ function toLostItemRow(item) {
     id: item.id,
     name: item.name,
     found_location: item.foundLocation || "",
-    found_time: item.foundTime || "",
+    found_date: item.foundDate || "",
+    found_time: item.timeUnknown ? "時間不明" : (item.foundTime || ""),
     finder: item.finder || CURRENT_USER_NAME,
     storage_type: item.storageType || "警備本部",
     storage_other: item.storageOther || "",
@@ -482,6 +494,8 @@ export default function App() {
   );
   const [lostViewMode, setLostViewMode] = useState("list"); // "list" | "photos"
   const [lostStatusFilter, setLostStatusFilter] = useState("保管中"); // "保管中" | "返却済" | "すべて"
+  const [lostSearchQuery, setLostSearchQuery] = useState("");
+  const [lostSearchField, setLostSearchField] = useState("name"); // "name" | "location"
   const [selectedLostDetail, setSelectedLostDetail] = useState(null);
   const [showLostFormModal, setShowLostFormModal] = useState(false);
   const [editingLostItem, setEditingLostItem] = useState(null);
@@ -489,7 +503,9 @@ export default function App() {
   const [lostForm, setLostForm] = useState({
     name: "",
     foundLocation: "",
+    foundDate: todayKey,
     foundTime: formatNowTimeInput(),
+    timeUnknown: false,
     finder: CURRENT_USER_NAME,
     storageType: "警備本部",
     storageOther: "",
@@ -723,20 +739,25 @@ export default function App() {
 
   const latestNotice = sortedNotices[0] || null;
 
-  // 落とし物：ステータス絞り込み＆並び順
-  // リスト表示は新しい順（上から新しい）、写真表示は古いものから新しいものへ「下から上に上がる」並び順
+  // 落とし物：ステータス絞り込み・名前/場所検索＆並び順
   const filteredLostItemsNewestFirst = useMemo(() => {
+    const q = lostSearchQuery.trim().toLowerCase();
     return lostItems
-      .filter(item => lostStatusFilter === "すべて" ? true : item.status === lostStatusFilter)
+      .filter(item => (lostStatusFilter === "すべて" ? true : item.status === lostStatusFilter))
+      .filter(item => {
+        if (!q) return true;
+        if (lostSearchField === "location") {
+          return (item.foundLocation || "").toLowerCase().includes(q);
+        }
+        return (item.name || "").toLowerCase().includes(q);
+      })
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [lostItems, lostStatusFilter]);
+  }, [lostItems, lostStatusFilter, lostSearchQuery, lostSearchField]);
 
   const filteredLostItemsBottomUp = useMemo(() => {
-    // 配列の末尾（下）が一番古く、先頭（上）に向かって新しくなる（＝下から上に上がる）
     return [...filteredLostItemsNewestFirst];
   }, [filteredLostItemsNewestFirst]);
 
-  // タブ一覧（必ずすべての種類タブの後に「すべて表示」が来るように保証）
   const allCartTabs = useMemo(() => {
     const base = cartCategories.map(normalizeCartCategoryName).filter(t => t && t !== "ALL");
     const fromCarts = carts
@@ -811,7 +832,9 @@ export default function App() {
     setLostForm({
       name: "",
       foundLocation: "",
+      foundDate: todayKey,
       foundTime: formatNowTimeInput(),
+      timeUnknown: false,
       finder: CURRENT_USER_NAME,
       storageType: "警備本部",
       storageOther: "",
@@ -828,7 +851,9 @@ export default function App() {
     setLostForm({
       name: item.name || "",
       foundLocation: item.foundLocation || "",
+      foundDate: item.foundDate || formatDateKey(new Date(item.createdAt || Date.now())),
       foundTime: item.foundTime || "",
+      timeUnknown: !!item.timeUnknown,
       finder: item.finder || CURRENT_USER_NAME,
       storageType: item.storageType || "警備本部",
       storageOther: item.storageOther || "",
@@ -877,7 +902,6 @@ export default function App() {
     setSavingLostItem(true);
     try {
       const itemId = editingLostItem ? editingLostItem.id : Date.now();
-      // 編集時でも初回投稿日時（createdAt）をそのまま保持する
       const originalCreatedAt = editingLostItem ? editingLostItem.createdAt : new Date().toISOString();
       const uploadedUrls = [];
 
@@ -908,7 +932,9 @@ export default function App() {
         id: itemId,
         name: lostForm.name.trim(),
         foundLocation: lostForm.foundLocation.trim(),
-        foundTime: lostForm.foundTime.trim(),
+        foundDate: lostForm.foundDate || todayKey,
+        foundTime: lostForm.timeUnknown ? "" : lostForm.foundTime.trim(),
+        timeUnknown: !!lostForm.timeUnknown,
         finder: lostForm.finder.trim() || CURRENT_USER_NAME,
         storageType: lostForm.storageType,
         storageOther: lostForm.storageType === "その他" ? lostForm.storageOther.trim() : "",
@@ -1521,6 +1547,37 @@ export default function App() {
           </button>
         </div>
 
+        {/* 検索バー（名前 / 場所で検索対象を選択可能） */}
+        <div style={{display: "flex", gap: "6px", marginBottom: "10px", alignItems: "center"}}>
+          <select
+            value={lostSearchField}
+            onChange={e=>setLostSearchField(e.target.value)}
+            aria-label="検索対象"
+            style={{
+              height: "40px",
+              borderRadius: "10px",
+              border: "1px solid #dfe5ec",
+              background: "#ffffff",
+              padding: "0 10px",
+              fontSize: "12px",
+              fontWeight: 700,
+              color: "#203d64",
+              flexShrink: 0
+            }}
+          >
+            <option value="name">名前</option>
+            <option value="location">場所</option>
+          </select>
+          <div className="searchbox" style={{margin: 0, flex: 1}}>
+            <Search size={18}/>
+            <input
+              value={lostSearchQuery}
+              onChange={e=>setLostSearchQuery(e.target.value)}
+              placeholder={lostSearchField === "location" ? "拾得場所で検索（例：中央棟、4棟）" : "落とし物の名前で検索（例：傘、財布）"}
+            />
+          </div>
+        </div>
+
         {/* 上部コントロールバー：左に「写真を表示 / リスト表示」、右に「保管中・返却済・すべて」 */}
         <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "12px"}}>
           <button
@@ -1569,7 +1626,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* 表示モード分岐：写真表示（横3枚・初回投稿日時・下から上に上がる並び順） vs プレビュー一覧 */}
+        {/* 表示モード分岐：写真表示（横3枚・大きめ縦長・初回投稿日時・下から上に上がる並び順） vs プレビュー一覧（大きめサムネイル） */}
         {lostViewMode === "photos" ? (
           filteredLostItemsBottomUp.length === 0 ? (
             <div className="empty">該当する落とし物はありません。</div>
@@ -1585,7 +1642,7 @@ export default function App() {
                     onClick={()=>setSelectedLostDetail(item)}
                     style={{
                       position: "relative",
-                      aspectRatio: "1 / 1",
+                      aspectRatio: "3 / 4",
                       borderRadius: "10px",
                       overflow: "hidden",
                       border: isReturned ? "2px solid #2b6843" : "1px solid #dfe5ec",
@@ -1610,12 +1667,11 @@ export default function App() {
                       />
                     ) : (
                       <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", color: "#64748b", padding: "6px"}}>
-                        <Camera size={22}/>
+                        <Camera size={24}/>
                         <span style={{fontSize: "11px", fontWeight: 700, textAlign: "center", wordBreak: "break-all"}}>{item.name}</span>
                       </div>
                     )}
 
-                    {/* 返却済の分かりやすいバッジ */}
                     {isReturned && (
                       <span style={{
                         position: "absolute",
@@ -1633,7 +1689,6 @@ export default function App() {
                       </span>
                     )}
 
-                    {/* 初回投稿日時ラベル（編集しても変わらない） */}
                     <span style={{
                       position: "absolute",
                       bottom: 0,
@@ -1674,10 +1729,10 @@ export default function App() {
                       borderColor: isReturned ? "#b7dfc6" : undefined
                     }}
                   >
-                    {/* プレビュー写真（1枚目のみ） */}
+                    {/* プレビュー写真（1枚目のみ・大きめ表示） */}
                     <div style={{
-                      width: "74px",
-                      height: "74px",
+                      width: "104px",
+                      height: "104px",
                       borderRadius: "10px",
                       overflow: "hidden",
                       background: "#f1f5f9",
@@ -1691,18 +1746,18 @@ export default function App() {
                       {thumb ? (
                         <img src={thumb} alt={item.name} style={{width: "100%", height: "100%", objectFit: "cover"}} />
                       ) : (
-                        <Camera size={22} color="#94a3b8"/>
+                        <Camera size={26} color="#94a3b8"/>
                       )}
                       {item.photos && item.photos.length > 1 && (
                         <span style={{
                           position: "absolute",
-                          bottom: "3px",
-                          right: "3px",
+                          bottom: "4px",
+                          right: "4px",
                           background: "rgba(15,23,42,0.75)",
                           color: "#fff",
                           fontSize: "10px",
                           fontWeight: 700,
-                          padding: "1px 5px",
+                          padding: "1px 6px",
                           borderRadius: "5px"
                         }}>
                           +{item.photos.length - 1}
@@ -1725,7 +1780,7 @@ export default function App() {
                         </span>
                       </div>
                       <small style={{marginTop: "3px"}}>
-                        場所: {item.foundLocation || "未記入"} ／ 時間: {item.foundTime || "未記入"}
+                        場所: {item.foundLocation || "未記入"} ／ 日時: {formatFoundDateTimeLabel(item)}
                       </small>
                       <small>
                         発見者: {item.finder} ／ 保管場所: <strong>{renderStorageLabel(item)}</strong>
@@ -2344,7 +2399,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* 種類別タブ（何個追加しても必ず「すべて表示」が最後に来る） */}
         <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px"}}>
           {allCartTabs.map(tab => {
             const count = carts.filter(c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) === tab).length;
@@ -2495,22 +2549,42 @@ export default function App() {
         />
       </label>
 
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px"}}>
-        <label className="field-label">拾得場所
+      <label className="field-label">拾得場所
+        <input
+          value={lostForm.foundLocation}
+          onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))}
+          placeholder="例：中央棟 1F トイレ前"
+        />
+      </label>
+
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "end"}}>
+        <label className="field-label">日付
           <input
-            value={lostForm.foundLocation}
-            onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))}
-            placeholder="例：中央棟 1F トイレ前"
+            type="date"
+            value={lostForm.foundDate}
+            onChange={e=>setLostForm(v=>({...v, foundDate: e.target.value}))}
           />
         </label>
+
         <label className="field-label">時間
           <input
             type="time"
             value={lostForm.foundTime}
+            disabled={lostForm.timeUnknown}
             onChange={e=>setLostForm(v=>({...v, foundTime: e.target.value}))}
+            style={{opacity: lostForm.timeUnknown ? 0.5 : 1}}
           />
         </label>
       </div>
+
+      <label style={{display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "8px", fontSize: "13px", fontWeight: 700, color: "#334155", cursor: "pointer"}}>
+        <input
+          type="checkbox"
+          checked={lostForm.timeUnknown}
+          onChange={e=>setLostForm(v=>({...v, timeUnknown: e.target.checked}))}
+        />
+        <span>時間不明</span>
+      </label>
 
       <label className="field-label">発見者名（ログイン名自動反映）
         <input
@@ -2614,783 +2688,7 @@ export default function App() {
       </button>
     </div></div>}
 
-    {/* 落とし物 詳細モーダル（横スクロール写真閲覧・編集・返却済切替） */}
+    {/* 落とし物 詳細モーダル */}
     {selectedLostDetail && <div className="modal-backdrop" onClick={()=>setSelectedLostDetail(null)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
       <div className="modal-head">
-        <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
-          <h2 style={{margin: 0}}>{selectedLostDetail.name}</h2>
-          <span style={{
-            fontSize: "12px",
-            fontWeight: 700,
-            padding: "3px 10px",
-            borderRadius: "999px",
-            background: selectedLostDetail.status === "返却済" ? "#2b6843" : "#fef3c7",
-            color: selectedLostDetail.status === "返却済" ? "#ffffff" : "#92400e"
-          }}>
-            {selectedLostDetail.status}
-          </span>
-        </div>
-        <button className="icon-button" onClick={()=>setSelectedLostDetail(null)}><X/></button>
-      </div>
-
-      {/* 写真の横スクロールギャラリー */}
-      {selectedLostDetail.photos && selectedLostDetail.photos.length > 0 ? (
-        <div style={{margin: "12px 0"}}>
-          <div style={{
-            display: "flex",
-            gap: "10px",
-            overflowX: "auto",
-            scrollSnapType: "x mandatory",
-            paddingBottom: "6px"
-          }}>
-            {selectedLostDetail.photos.map((photoUrl, idx) => (
-              <div
-                key={idx}
-                style={{
-                  flex: "0 0 85%",
-                  maxWidth: "300px",
-                  aspectRatio: "4 / 3",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid #dfe5ec",
-                  background: "#f8fafc",
-                  scrollSnapAlign: "start"
-                }}
-              >
-                <img
-                  src={photoUrl}
-                  alt={`${selectedLostDetail.name} (${idx + 1})`}
-                  style={{width: "100%", height: "100%", objectFit: "cover"}}
-                />
-              </div>
-            ))}
-          </div>
-          {selectedLostDetail.photos.length > 1 && (
-            <small style={{color: "#64748b"}}>横にスワイプ・スクロールして全{selectedLostDetail.photos.length}枚の写真を確認できます</small>
-          )}
-        </div>
-      ) : (
-        <div className="empty" style={{margin: "12px 0"}}>写真は登録されていません。</div>
-      )}
-
-      <div className="notice-card" style={{margin: "10px 0"}}>
-        <p style={{margin: "0 0 6px"}}><strong>拾得場所:</strong> {selectedLostDetail.foundLocation || "未記入"}</p>
-        <p style={{margin: "0 0 6px"}}><strong>時間:</strong> {selectedLostDetail.foundTime || "未記入"}</p>
-        <p style={{margin: "0 0 6px"}}><strong>発見者名:</strong> {selectedLostDetail.finder}</p>
-        <p style={{margin: "0 0 6px"}}><strong>保管場所:</strong> {renderStorageLabel(selectedLostDetail)}</p>
-        <p style={{margin: "0 0 6px"}}><strong>初回登録日時:</strong> {formatPostedDateTime(selectedLostDetail.createdAt)}</p>
-        {selectedLostDetail.comment && (
-          <p style={{margin: "8px 0 0", paddingTop: "8px", borderTop: "1px solid #e2e8f0", whiteSpace: "pre-wrap"}}>
-            <strong>コメント:</strong> {selectedLostDetail.comment}
-          </p>
-        )}
-      </div>
-
-      {/* アクションボタン（返却済切替・編集・削除） */}
-      <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px"}}>
-        <button
-          type="button"
-          className="primary"
-          style={{
-            flex: 1,
-            background: selectedLostDetail.status === "保管中" ? "#2b6843" : "#475569",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px"
-          }}
-          onClick={()=>toggleLostItemStatus(selectedLostDetail)}
-        >
-          <CheckCircle2 size={16}/>
-          {selectedLostDetail.status === "保管中" ? "返却済にする" : "保管中に戻す"}
-        </button>
-
-        <button
-          type="button"
-          className="secondary small"
-          style={{
-            border: "1px solid #dfe5ec",
-            background: "#fff",
-            borderRadius: "10px",
-            padding: "10px 14px",
-            fontSize: "13px",
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "5px"
-          }}
-          onClick={()=>openEditLostModal(selectedLostDetail)}
-        >
-          <Pencil size={15}/> 編集
-        </button>
-
-        <button
-          type="button"
-          className="danger-outline"
-          onClick={()=>deleteLostItem(selectedLostDetail.id)}
-        >
-          <Trash2 size={16}/> 削除
-        </button>
-      </div>
-    </div></div>}
-
-    {/* お知らせ新規作成モーダル */}
-    {showNoticeAddModal && <div className="modal-backdrop" onClick={()=>setShowNoticeAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
-      <div className="modal-head">
-        <h2>お知らせを作成</h2>
-        <button className="icon-button" onClick={()=>setShowNoticeAddModal(false)}><X/></button>
-      </div>
-
-      <label className="field-label">タイトル
-        <input
-          value={noticeForm.title}
-          onChange={e=>setNoticeForm(v=>({...v, title: e.target.value}))}
-          placeholder="例：前日準備の集合時間について"
-        />
-      </label>
-
-      <label className="field-label">作成者（自動反映）
-        <input
-          value={CURRENT_USER_NAME}
-          readOnly
-          style={{background: "#f1f5f9", color: "#475569"}}
-        />
-      </label>
-
-      <label className="field-label">本文
-        <textarea
-          rows={4}
-          value={noticeForm.body}
-          onChange={e=>setNoticeForm(v=>({...v, body: e.target.value}))}
-          placeholder="お知らせの内容を入力してください"
-        />
-      </label>
-
-      <div className="field-label" style={{marginTop: "12px"}}>
-        <span>公開設定（複数選択可）</span>
-        <div style={{border: "1px solid #dfe5ec", borderRadius: "10px", padding: "8px", marginTop: "6px", background: "#f8fafc"}}>
-          <label style={{display: "flex", alignItems: "center", gap: "8px", padding: "6px 4px", fontWeight: 700, cursor: "pointer"}}>
-            <input
-              type="checkbox"
-              checked={noticeForm.targets.includes("全体公開")}
-              onChange={()=>toggleNoticeTarget("全体公開")}
-            />
-            <span>全体公開</span>
-          </label>
-
-          {departments.map(dept => {
-            const teams = teamsByDepartment[dept] || [];
-            const hasTeams = teams.length > 0;
-            const isExpanded = !!expandedNoticeDepts[dept];
-            const isDeptChecked = noticeForm.targets.includes(dept);
-
-            return (
-              <div key={dept} style={{borderTop: "1px solid #e2e8f0", paddingTop: "4px", marginTop: "4px"}}>
-                <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px"}}>
-                  <label style={{display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", flex: 1}}>
-                    <input
-                      type="checkbox"
-                      checked={isDeptChecked}
-                      onChange={()=>toggleNoticeTarget(dept)}
-                    />
-                    <span style={{fontWeight: 600}}>{dept}</span>
-                  </label>
-                  {hasTeams && (
-                    <button
-                      type="button"
-                      onClick={()=>toggleNoticeDeptExpand(dept)}
-                      style={{
-                        border: "1px solid #cbd5e1",
-                        background: "#ffffff",
-                        borderRadius: "6px",
-                        padding: "3px 8px",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        color: "#334155",
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "3px"
-                      }}
-                    >
-                      {isExpanded ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
-                      班を選択 ({teams.length})
-                    </button>
-                  )}
-                </div>
-
-                {hasTeams && isExpanded && (
-                  <div style={{paddingLeft: "26px", paddingBottom: "6px", display: "flex", flexDirection: "column", gap: "4px"}}>
-                    {teams.map(team => {
-                      const teamTarget = `${dept}（${team}）`;
-                      return (
-                        <label key={team} style={{display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", padding: "2px 0"}}>
-                          <input
-                            type="checkbox"
-                            checked={noticeForm.targets.includes(teamTarget)}
-                            onChange={()=>toggleNoticeTarget(teamTarget)}
-                          />
-                          <span>{team}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <small style={{display: "block", marginTop: "6px", color: "#475569"}}>
-          選択中の公開先: {noticeForm.targets.length > 0 ? noticeForm.targets.join("、") : "未選択（登録時は全体公開になります）"}
-        </small>
-      </div>
-
-      <button
-        className="primary full"
-        style={{marginTop: "14px"}}
-        disabled={!noticeForm.title.trim() || !noticeForm.body.trim()}
-        onClick={saveNotice}
-      >
-        投稿する
-      </button>
-    </div></div>}
-
-    {showEventModal && <div className="modal-backdrop" onClick={()=>{setShowEventModal(false);setEditingEventId(null);}}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>{editingEventId !== null ? "予定を編集" : "予定を追加"}</h2>
-        <button className="icon-button" onClick={()=>{setShowEventModal(false);setEditingEventId(null);}}><X/></button>
-      </div>
-      <label className="field-label">予定名
-        <input
-          value={eventForm.title}
-          onChange={e=>setEventForm(v=>({...v, title: e.target.value}))}
-          placeholder="例：各局代表者会議"
-        />
-      </label>
-      <label className="field-label">日付
-        <input
-          type="date"
-          value={eventForm.date}
-          onChange={e=>setEventForm(v=>({...v, date: e.target.value}))}
-        />
-      </label>
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px"}}>
-        <label className="field-label">開始時間
-          <input
-            type="time"
-            value={eventForm.startTime}
-            onChange={e=>setEventForm(v=>({...v, startTime: e.target.value}))}
-          />
-        </label>
-        <label className="field-label">終了時間
-          <input
-            type="time"
-            value={eventForm.endTime}
-            onChange={e=>setEventForm(v=>({...v, endTime: e.target.value}))}
-          />
-        </label>
-      </div>
-      <label className="field-label">場所
-        <input
-          value={eventForm.location}
-          onChange={e=>setEventForm(v=>({...v, location: e.target.value}))}
-          placeholder="例：学生センターフリースペース / 4棟 301"
-        />
-      </label>
-      <label className="field-label">公開範囲（局）
-        <select
-          value={eventForm.scope}
-          onChange={e=>setEventForm(v=>({...v, scope: e.target.value, targetTeam: ""}))}
-        >
-          <option value="全体公開">全体公開</option>
-          {departments.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </label>
-      {availableTeamsForEvent.length > 0 && (
-        <label className="field-label">公開対象（班）
-          <select
-            value={eventForm.targetTeam}
-            onChange={e=>setEventForm(v=>({...v, targetTeam: e.target.value}))}
-          >
-            <option value="">{eventForm.scope} 全体</option>
-            {availableTeamsForEvent.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
-      )}
-      <label className="field-label">メモ・備考（任意）
-        <textarea
-          value={eventForm.note}
-          onChange={e=>setEventForm(v=>({...v, note: e.target.value}))}
-          placeholder="集合時間や持ち物などの補足"
-        />
-      </label>
-      <button className="primary full" disabled={!eventForm.title.trim() || !eventForm.date} onClick={saveEvent}>
-        {editingEventId !== null ? "更新を保存" : "登録"}
-      </button>
-    </div></div>}
-
-    {showMemberForm && <div className="modal-backdrop" onClick={()=>setShowMemberForm(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head"><h2>委員を追加</h2><button className="icon-button" onClick={()=>setShowMemberForm(false)}><X/></button></div>
-      <label className="field-label">氏名<input value={memberForm.name} onChange={e=>setMemberForm(v=>({...v,name:e.target.value}))} placeholder="例：山田 太郎"/></label>
-      <label className="field-label">メールアドレス<input type="email" value={memberForm.email} onChange={e=>setMemberForm(v=>({...v,email:e.target.value}))} placeholder="例：member@example.com"/></label>
-      <label className="field-label">所属局<select value={memberForm.dept} onChange={e=>setMemberForm(v=>({...v,dept:e.target.value,team:""}))}>{departments.map(d=><option key={d}>{d}</option>)}</select></label>
-      <label className="field-label">班（任意）<input value={memberForm.team} onChange={e=>setMemberForm(v=>({...v,team:e.target.value}))} placeholder="例：広報班"/></label>
-      <label className="field-label">役職<select value={memberForm.role} onChange={e=>setMemberForm(v=>({...v,role:e.target.value}))}>{["委員長","副委員長","監査","局長","局次","班長","委員","事務課"].map(r=><option key={r}>{r}</option>)}</select></label>
-      <button className="primary full" disabled={!memberForm.name.trim() || !memberForm.email.trim()} onClick={()=>{
-        setMembers(prev=>[...prev,{id:Date.now(),name:memberForm.name.trim(),email:memberForm.email.trim(),dept:memberForm.dept,team:memberForm.team.trim()||"未設定",role:memberForm.role,active:true}]);
-        setMemberForm({name:"",email:"",dept:"運営管理局",team:"",role:"委員"});setShowMemberForm(false);
-        alert("登録しました。");
-      }}>登録</button>
-    </div></div>}
-
-    {showUpload && <div className="modal-backdrop" onClick={()=>setShowUpload(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head"><h2>資料をアップロード</h2><button className="icon-button" onClick={()=>setShowUpload(false)}><X/></button></div>
-      <label className="upload-zone"><UploadCloud size={27}/><strong>{file ? file.name : "ファイルを選択"}</strong><small>基本的なファイル形式に対応しています</small><input type="file" onChange={e=>setFile(e.target.files?.[0] || null)}/></label>
-      <label className="field-label">公開範囲（局）
-        <select
-          value={scope}
-          onChange={e => {
-            setScope(e.target.value);
-            setTargetTeam("");
-          }}
-        >
-          <option value="全体公開">全体公開</option>
-          {departments.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-      </label>
-      {availableTeamsForScope.length > 0 && (
-        <label className="field-label">公開対象（班）
-          <select value={targetTeam} onChange={e => setTargetTeam(e.target.value)}>
-            <option value="">{scope} 全体</option>
-            {availableTeamsForScope.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </label>
-      )}
-      <label className="field-label">説明・備考（任意）<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="資料についての説明"/></label>
-      <button className="primary full" disabled={!file || uploadingDoc} onClick={upload}>
-        {uploadingDoc ? "アップロード中..." : "登録"}
-      </button>
-    </div></div>}
-
-    {selected && <div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head"><h2>資料の詳細</h2><button className="icon-button" onClick={()=>setSelected(null)}><X/></button></div>
-      <div className="detail-file">
-        <div className="file-icon large">{fileIcon(selected.name)}</div>
-        <div>
-          <strong>{selected.name}</strong>
-          <small>{selected.dept} ・ {selected.scope}{selected.targetTeam ? `（${selected.targetTeam}）` : ""}</small>
-        </div>
-      </div>
-      {selected.note && <p className="detail-note">{selected.note}</p>}
-      <div className="detail-actions" style={{flexWrap: "wrap"}}>
-        <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"}} onClick={()=>openInBrowserTab(selected)}><ExternalLink size={16}/> ブラウザで開く</button>
-        <button className="primary" onClick={()=>downloadDoc(selected)}><Download size={17}/> ダウンロード</button>
-        <button className="danger-outline" onClick={()=>removeDoc(selected.id)}><Trash2 size={17}/> 削除</button>
-      </div>
-      <h3 className="comments-title">コメント ({selected.comments.length})</h3>
-      <div className="comments">{selected.comments.map((c,i)=><div className="comment" key={i}><p>{c}</p><small>{CURRENT_USER_NAME}</small></div>)}</div>
-      <div className="comment-entry"><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメントを入力"/><button className="primary" onClick={addComment} disabled={!comment.trim()}>送信</button></div>
-    </div></div>}
-
-    {/* 鍵の貸出中一覧モーダル */}
-    {showLentModal && <div className="modal-backdrop" onClick={()=>setShowLentModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>貸出中の鍵一覧</h2>
-        <button className="icon-button" onClick={()=>setShowLentModal(false)}><X/></button>
-      </div>
-      <p className="muted">現在貸出中となっている鍵と所持者の情報です。</p>
-      <div className="file-list" style={{maxHeight: "350px", overflowY: "auto", marginTop: "12px"}}>
-        {keys.filter(k => k.status === "貸出中").length === 0 ? (
-          <div className="empty">現在貸出中の鍵はありません。</div>
-        ) : (
-          keys.filter(k => k.status === "貸出中").map(k => (
-            <div className="file-row" key={k.id} style={{flexDirection: "column", alignItems: "flex-start", gap: "4px"}}>
-              <div style={{display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center"}}>
-                <strong>{k.name}</strong>
-                <span style={{fontSize: "12px", color: "#a34343", fontWeight: 700}}>貸出中</span>
-              </div>
-              <small>所持者: <strong>{k.holder}</strong></small>
-              {k.history && k.history.length > 0 && (
-                <small style={{color: "#555"}}>直近の操作: {k.history[0].time} {k.history[0].action}</small>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-      <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setShowLentModal(false)}>閉じる</button>
-    </div></div>}
-
-    {/* 鍵の詳細・編集モーダル */}
-    {selectedKeyDetail && <div className="modal-backdrop" onClick={closeKeyDetailModal}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>{selectedKeyDetail.name} の詳細</h2>
-        <button className="icon-button" onClick={closeKeyDetailModal}><X/></button>
-      </div>
-
-      {!isEditingKey ? (
-        <div className="notice-card" style={{margin: "12px 0"}}>
-          <p style={{margin: 0}}>状態: <strong style={{color: selectedKeyDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedKeyDetail.status}</strong></p>
-          <p style={{margin: "4px 0 0"}}>所持者 / 保管場所: <strong>{selectedKeyDetail.status === "貸出中" ? selectedKeyDetail.holder : selectedKeyDetail.location}</strong></p>
-          <div style={{marginTop: "10px"}}>
-            <button
-              type="button"
-              className="secondary small"
-              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
-              onClick={()=>{
-                setKeyEditForm({
-                  name: selectedKeyDetail.name || "",
-                  location: selectedKeyDetail.location || ""
-                });
-                setIsEditingKey(true);
-              }}
-            >
-              <Pencil size={13}/> 名前・保管場所を編集
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="notice-card" style={{margin: "12px 0"}}>
-          <label className="field-label" style={{marginTop: 0}}>鍵の名前
-            <input
-              value={keyEditForm.name}
-              onChange={e=>setKeyEditForm(v=>({...v, name: e.target.value}))}
-              placeholder="例：フリスペ 101"
-            />
-          </label>
-          <label className="field-label">保管場所
-            <input
-              value={keyEditForm.location}
-              onChange={e=>setKeyEditForm(v=>({...v, location: e.target.value}))}
-              placeholder="例：雄飛室・鍵ボックス"
-            />
-          </label>
-          {selectedKeyDetail.status === "貸出中" && (
-            <small style={{display: "block", color: "#64748b", marginTop: "6px"}}>
-              ※現在貸出中のため、返却時の保管場所として反映されます。
-            </small>
-          )}
-          <div style={{display: "flex", gap: "8px", marginTop: "12px"}}>
-            <button
-              type="button"
-              className="primary small"
-              disabled={!keyEditForm.name.trim()}
-              onClick={saveKeyInfo}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="secondary small"
-              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}}
-              onClick={()=>setIsEditingKey(false)}
-            >
-              キャンセル
-            </button>
-          </div>
-        </div>
-      )}
-
-      <h3 style={{fontSize: "14px", margin: "16px 0 8px"}}>操作履歴（日時・アクション）</h3>
-      <div className="file-list" style={{maxHeight: "250px", overflowY: "auto"}}>
-        {!selectedKeyDetail.history || selectedKeyDetail.history.length === 0 ? (
-          <div className="empty">操作履歴はありません。</div>
-        ) : (
-          selectedKeyDetail.history.map((h, i) => (
-            <div className="file-row" key={i} style={{padding: "8px 12px"}}>
-              <div className="file-icon"><KeyRound size={16}/></div>
-              <div className="file-info">
-                <strong>{h.action}</strong>
-                <small>{h.time} ・ {h.user}</small>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <button className="primary full" style={{marginTop: "16px"}} onClick={closeKeyDetailModal}>閉じる</button>
-    </div></div>}
-
-    {/* 新しい鍵を追加モーダル */}
-    {showKeyAddModal && <div className="modal-backdrop" onClick={()=>setShowKeyAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>新しい鍵を追加</h2>
-        <button className="icon-button" onClick={()=>setShowKeyAddModal(false)}><X/></button>
-      </div>
-      <label className="field-label">鍵の名前<input value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="例：理科室前倉庫の鍵"/></label>
-      <label className="field-label">保管場所<input value={newKeyLocation} onChange={e=>setNewKeyLocation(e.target.value)} placeholder="例：雄飛室・鍵ボックス"/></label>
-      <button className="primary full" disabled={!newKeyName.trim()} onClick={async ()=>{
-        const name = newKeyName.trim();
-        const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-        const newKey = {
-          id: Date.now(),
-          name,
-          status: "保管中",
-          holder: "-",
-          location: newKeyLocation.trim() || "雄飛室・鍵ボックス",
-          history: [{time: nowStr, action: "登録", user: CURRENT_USER_NAME}]
-        };
-        setKeys(prev => [newKey, ...prev]);
-        if (supabase) {
-          await supabase.from("keys").insert(newKey);
-        }
-        setNewKeyName("");
-        setNewKeyLocation("雄飛室・鍵ボックス");
-        setShowKeyAddModal(false);
-        alert("保存しました。");
-      }}>登録</button>
-    </div></div>}
-
-    {/* 台車の貸出中一覧モーダル */}
-    {showCartLentModal && <div className="modal-backdrop" onClick={()=>setShowCartLentModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>貸出中の台車一覧</h2>
-        <button className="icon-button" onClick={()=>setShowCartLentModal(false)}><X/></button>
-      </div>
-      <p className="muted">現在貸出中となっている台車と使用者の情報です。</p>
-      <div className="file-list" style={{maxHeight: "350px", overflowY: "auto", marginTop: "12px"}}>
-        {carts.filter(c => c.status === "貸出中").length === 0 ? (
-          <div className="empty">現在貸出中の台車はありません。</div>
-        ) : (
-          carts.filter(c => c.status === "貸出中").map(c => (
-            <div className="file-row" key={c.id} style={{flexDirection: "column", alignItems: "flex-start", gap: "4px"}}>
-              <div style={{display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center"}}>
-                <strong>{c.name}</strong>
-                <span style={{fontSize: "12px", color: "#a34343", fontWeight: 700}}>貸出中</span>
-              </div>
-              <small>種類: {normalizeCartCategoryName(c.category || inferCartCategory(c.name))} ・ 使用者: <strong>{c.holder}</strong></small>
-              {c.history && c.history.length > 0 && (
-                <small style={{color: "#555"}}>直近の操作: {c.history[0].time} {c.history[0].action}</small>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-      <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setShowCartLentModal(false)}>閉じる</button>
-    </div></div>}
-
-    {/* 台車の詳細・編集モーダル */}
-    {selectedCartDetail && <div className="modal-backdrop" onClick={closeCartDetailModal}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>{selectedCartDetail.name} の詳細</h2>
-        <button className="icon-button" onClick={closeCartDetailModal}><X/></button>
-      </div>
-
-      {!isEditingCart ? (
-        <div className="notice-card" style={{margin: "12px 0"}}>
-          <p style={{margin: 0}}>種類（タブ）: <strong>{normalizeCartCategoryName(selectedCartDetail.category || inferCartCategory(selectedCartDetail.name))}</strong></p>
-          <p style={{margin: "4px 0 0"}}>状態: <strong style={{color: selectedCartDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedCartDetail.status}</strong></p>
-          <p style={{margin: "4px 0 0"}}>使用者 / 保管場所: <strong>{selectedCartDetail.status === "貸出中" ? selectedCartDetail.holder : selectedCartDetail.location}</strong></p>
-          <div style={{marginTop: "10px"}}>
-            <button
-              type="button"
-              className="secondary small"
-              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
-              onClick={()=>{
-                setCartEditForm({
-                  category: normalizeCartCategoryName(selectedCartDetail.category || inferCartCategory(selectedCartDetail.name)),
-                  name: selectedCartDetail.name || "",
-                  location: selectedCartDetail.location || ""
-                });
-                setIsEditingCart(true);
-              }}
-            >
-              <Pencil size={13}/> 名前・保管場所を編集
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="notice-card" style={{margin: "12px 0"}}>
-          <label className="field-label" style={{marginTop: 0}}>種類（タブ）
-            <select
-              value={cartEditForm.category}
-              onChange={e=>setCartEditForm(v=>({...v, category: e.target.value}))}
-            >
-              {allCartTabs.map(tab => <option key={tab} value={tab}>{tab}</option>)}
-            </select>
-          </label>
-          <label className="field-label">台車の名前・番号
-            <input
-              value={cartEditForm.name}
-              onChange={e=>setCartEditForm(v=>({...v, name: e.target.value}))}
-              placeholder="例：ダスキン台車 18"
-            />
-          </label>
-          <label className="field-label">保管場所
-            <input
-              value={cartEditForm.location}
-              onChange={e=>setCartEditForm(v=>({...v, location: e.target.value}))}
-              placeholder="例：4棟前 / 雄飛室 / 学セン階段下"
-            />
-          </label>
-          {selectedCartDetail.status === "貸出中" && (
-            <small style={{display: "block", color: "#64748b", marginTop: "6px"}}>
-              ※現在貸出中のため、返却時の保管場所として反映されます。
-            </small>
-          )}
-          <div style={{display: "flex", gap: "8px", marginTop: "12px"}}>
-            <button
-              type="button"
-              className="primary small"
-              disabled={!cartEditForm.name.trim()}
-              onClick={saveCartInfo}
-            >
-              保存
-            </button>
-            <button
-              type="button"
-              className="secondary small"
-              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}}
-              onClick={()=>setIsEditingCart(false)}
-            >
-              キャンセル
-            </button>
-          </div>
-        </div>
-      )}
-
-      <h3 style={{fontSize: "14px", margin: "16px 0 8px"}}>操作履歴（日時・アクション）</h3>
-      <div className="file-list" style={{maxHeight: "250px", overflowY: "auto"}}>
-        {!selectedCartDetail.history || selectedCartDetail.history.length === 0 ? (
-          <div className="empty">操作履歴はありません。</div>
-        ) : (
-          selectedCartDetail.history.map((h, i) => (
-            <div className="file-row" key={i} style={{padding: "8px 12px"}}>
-              <div className="file-icon"><Truck size={16}/></div>
-              <div className="file-info">
-                <strong>{h.action}</strong>
-                <small>{h.time} ・ {h.user}</small>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-      <button className="primary full" style={{marginTop: "16px"}} onClick={closeCartDetailModal}>閉じる</button>
-    </div></div>}
-
-    {/* ＋ 追加モーダル（台車 または タブを選択して追加） */}
-    {showCartAddModal && <div className="modal-backdrop" onClick={()=>setShowCartAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>追加</h2>
-        <button className="icon-button" onClick={()=>setShowCartAddModal(false)}><X/></button>
-      </div>
-
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px"}}>
-        <button
-          type="button"
-          onClick={()=>setAddModalMode("cart")}
-          style={{
-            padding: "10px",
-            borderRadius: "10px",
-            border: addModalMode === "cart" ? "1.5px solid #203d64" : "1px solid #dfe5ec",
-            background: addModalMode === "cart" ? "#203d64" : "#ffffff",
-            color: addModalMode === "cart" ? "#ffffff" : "#1e293b",
-            fontWeight: 700,
-            fontSize: "13px",
-            cursor: "pointer"
-          }}
-        >
-          台車を追加
-        </button>
-        <button
-          type="button"
-          onClick={()=>setAddModalMode("tab")}
-          style={{
-            padding: "10px",
-            borderRadius: "10px",
-            border: addModalMode === "tab" ? "1.5px solid #203d64" : "1px solid #dfe5ec",
-            background: addModalMode === "tab" ? "#203d64" : "#ffffff",
-            color: addModalMode === "tab" ? "#ffffff" : "#1e293b",
-            fontWeight: 700,
-            fontSize: "13px",
-            cursor: "pointer"
-          }}
-        >
-          タブを追加
-        </button>
-      </div>
-
-      {addModalMode === "cart" ? (
-        <>
-          <label className="field-label">種類（タブ）
-            <select
-              value={newCartCategory}
-              onChange={e => {
-                const cat = e.target.value;
-                setNewCartCategory(cat);
-                setNewCartLocation(defaultLocationForCategory(cat));
-              }}
-            >
-              {allCartTabs.map(tab => <option key={tab} value={tab}>{tab}</option>)}
-            </select>
-          </label>
-          <label className="field-label">台車の名前・番号
-            <input
-              value={newCartName}
-              onChange={e=>setNewCartName(e.target.value)}
-              placeholder="例：学友台車 5 / ダスキン台車 23"
-            />
-          </label>
-          <label className="field-label">保管場所
-            <input
-              value={newCartLocation}
-              onChange={e=>setNewCartLocation(e.target.value)}
-              placeholder="例：雄飛室 / 4棟前 / 学セン階段下"
-            />
-          </label>
-          <button
-            className="primary full"
-            disabled={!newCartName.trim()}
-            onClick={async ()=>{
-              const name = newCartName.trim();
-              const cat = normalizeCartCategoryName(newCartCategory || "雄飛台車");
-              const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-              const newCart = {
-                id: Date.now(),
-                category: cat,
-                name,
-                status: "保管中",
-                holder: "-",
-                location: newCartLocation.trim() || defaultLocationForCategory(cat),
-                history: [{time: nowStr, action: "登録", user: CURRENT_USER_NAME}]
-              };
-              setCarts(prev => [newCart, ...prev]);
-              if (supabase) {
-                await supabase.from("carts").insert(newCart);
-              }
-              setActiveCartTab(cat);
-              setNewCartName("");
-              setShowCartAddModal(false);
-              alert("台車を登録しました。");
-            }}
-          >
-            台車を登録
-          </button>
-        </>
-      ) : (
-        <>
-          <label className="field-label">新しいタブ名（種類名）
-            <input
-              value={newTabName}
-              onChange={e=>setNewTabName(e.target.value)}
-              placeholder="例：火器台車 / ステージ用台車"
-            />
-          </label>
-          <button
-            className="primary full"
-            disabled={!newTabName.trim() || allCartTabs.includes(newTabName.trim())}
-            onClick={()=>{
-              const tabName = newTabName.trim();
-              setCartCategories(prev => Array.from(new Set([...prev, tabName])));
-              setActiveCartTab(tabName);
-              setNewTabName("");
-              setShowCartAddModal(false);
-              alert(`タブ「${tabName}」を追加しました。`);
-            }}
-          >
-            タブを登録
-          </button>
-        </>
-      )}
-    </div></div>}
-  </div>;
-}
+        <div style={{display: "flex
