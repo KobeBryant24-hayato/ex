@@ -4,7 +4,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight
+  CalendarCog, ChevronRight, MapPin, Clock
 } from "lucide-react";
 
 const initialDepartments = [
@@ -18,6 +18,13 @@ const initialDocs = [
   { id: 3, name: "警備配置図.pdf", dept: "警備局", scope: "警備局", targetTeam: "トランシーバー班", note: "", updated: "2026-11-11T09:20:00", owner: "警備 佐藤", comments: ["配置の確認をお願いします。"] }
 ];
 
+function formatDateKey(dateObj) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const d = String(dateObj.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function fileIcon(name) {
   const ext = name.split(".").pop()?.toLowerCase();
   if (["jpg","jpeg","png","gif","webp"].includes(ext)) return <Image />;
@@ -29,11 +36,54 @@ function fileIcon(name) {
 }
 
 export default function App() {
+  const todayObj = new Date();
+  const todayKey = formatDateKey(todayObj);
+
   const [page, setPage] = useState("home");
   const [section, setSection] = useState("委員会活動全体");
   const [docs, setDocs] = useState(initialDocs);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+
+  // カレンダー用ステート
+  const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(todayKey);
+  const [events, setEvents] = useState([
+    {
+      id: 1,
+      title: "雄飛祭 実行委員会全体会議",
+      date: todayKey,
+      startTime: "17:00",
+      endTime: "18:30",
+      location: "中央棟 / 学生センターフリースペース",
+      scope: "全体公開",
+      targetTeam: "",
+      note: "各局の進捗共有と当日の動きの確認"
+    },
+    {
+      id: 2,
+      title: "警備配置・トランシーバー確認",
+      date: todayKey,
+      startTime: "18:45",
+      endTime: "19:30",
+      location: "正門・西門周辺",
+      scope: "警備局",
+      targetTeam: "トランシーバー班",
+      note: "入構許可証の確認手順もあわせて共有"
+    }
+  ]);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    title: "",
+    date: todayKey,
+    startTime: "17:00",
+    endTime: "18:00",
+    location: "",
+    scope: "全体公開",
+    targetTeam: "",
+    note: ""
+  });
+
   const [keys, setKeys] = useState([
     { id: 1, name: "フリスペ 101", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
     { id: 2, name: "フリスペ 102", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
@@ -115,6 +165,93 @@ export default function App() {
     .filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b) => new Date(b.updated) - new Date(a.updated)), [docs, section, search]);
 
+  // カレンダーグリッド生成
+  const calendarCells = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDayOfWeek = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells = [];
+
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      cells.push({ type: "empty", key: `empty-${i}` });
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(year, month, day);
+      const key = formatDateKey(dateObj);
+      const dayEvents = events.filter(ev => ev.date === key);
+      cells.push({
+        type: "day",
+        key,
+        day,
+        dayOfWeek: dateObj.getDay(),
+        hasEvents: dayEvents.length > 0,
+        eventCount: dayEvents.length
+      });
+    }
+    return cells;
+  }, [currentMonth, events]);
+
+  const selectedDateEvents = useMemo(() => {
+    return events
+      .filter(ev => ev.date === selectedDate)
+      .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
+  }, [events, selectedDate]);
+
+  const nextUpcomingEvent = useMemo(() => {
+    const sorted = [...events].sort((a, b) => {
+      const aKey = `${a.date} ${a.startTime || "00:00"}`;
+      const bKey = `${b.date} ${b.startTime || "00:00"}`;
+      return aKey.localeCompare(bKey);
+    });
+    return sorted.find(ev => ev.date >= todayKey) || sorted[0] || null;
+  }, [events, todayKey]);
+
+  function openNewEventModal(dateStr = selectedDate) {
+    setEventForm({
+      title: "",
+      date: dateStr,
+      startTime: "17:00",
+      endTime: "18:00",
+      location: "",
+      scope: "全体公開",
+      targetTeam: "",
+      note: ""
+    });
+    setShowEventModal(true);
+  }
+
+  function saveEvent() {
+    if (!eventForm.title.trim() || !eventForm.date) return;
+    const availableTeams = eventForm.scope !== "全体公開" ? (teamsByDepartment[eventForm.scope] || []) : [];
+    const resolvedTeam = availableTeams.length > 0 ? eventForm.targetTeam : "";
+
+    const newEv = {
+      id: Date.now(),
+      title: eventForm.title.trim(),
+      date: eventForm.date,
+      startTime: eventForm.startTime,
+      endTime: eventForm.endTime,
+      location: eventForm.location.trim(),
+      scope: eventForm.scope,
+      targetTeam: resolvedTeam,
+      note: eventForm.note.trim()
+    };
+
+    setEvents(prev => [...prev, newEv]);
+    setSelectedDate(eventForm.date);
+    const [y, m] = eventForm.date.split("-").map(Number);
+    if (y && m) {
+      setCurrentMonth(new Date(y, m - 1, 1));
+    }
+    setShowEventModal(false);
+  }
+
+  function deleteEvent(id) {
+    if (!window.confirm("この予定を削除しますか？")) return;
+    setEvents(prev => prev.filter(ev => ev.id !== id));
+  }
+
   function upload() {
     if (!file) return;
     const now = new Date().toISOString();
@@ -165,6 +302,7 @@ export default function App() {
   ];
 
   const availableTeamsForScope = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
+  const availableTeamsForEvent = eventForm.scope !== "全体公開" ? (teamsByDepartment[eventForm.scope] || []) : [];
 
   return <div className="app-shell">
     <header className="topbar">
@@ -186,7 +324,15 @@ export default function App() {
     <main>
       {page === "home" && <section className="page">
         <p className="eyebrow">WELCOME BACK</p><h1>ホーム</h1>
-        <div className="hero-card"><div className="hero-label">NEXT EVENT</div><h2>雄飛祭 実行委員会全体会議</h2><p>次回の予定日時・場所が表示されます。</p></div>
+        <div className="hero-card" style={{cursor: "pointer"}} onClick={()=>setPage("calendar")}>
+          <div className="hero-label">NEXT EVENT</div>
+          <h2>{nextUpcomingEvent ? nextUpcomingEvent.title : "雄飛祭 実行委員会全体会議"}</h2>
+          <p>
+            {nextUpcomingEvent
+              ? `${nextUpcomingEvent.date}${nextUpcomingEvent.startTime ? ` ${nextUpcomingEvent.startTime}${nextUpcomingEvent.endTime ? `〜${nextUpcomingEvent.endTime}` : ""}` : ""}${nextUpcomingEvent.location ? ` ／ ${nextUpcomingEvent.location}` : ""}`
+              : "次回の予定日時・場所が表示されます。"}
+          </p>
+        </div>
         <div className="section-heading"><h3>最新のお知らせ</h3><span className="muted">一覧を表示 →</span></div>
         <div className="notice-card"><strong>資料共有のテスト運用について</strong><p>新しい資料共有画面の動作確認を実施中です。</p><small>サンプル通知</small></div>
         <h3 className="menu-title">メニュー</h3>
@@ -195,6 +341,164 @@ export default function App() {
           <button className="menu-tile" onClick={()=>setPage("lost")}><Search/><span>落とし物</span></button>
           <button className="menu-tile" onClick={()=>setPage("inquiry")}><MessageCircle/><span>問い合わせ</span></button>
           <button className="menu-tile" onClick={()=>setPage("admin")}><Settings/><span>管理者設定</span></button>
+        </div>
+      </section>}
+
+      {page === "calendar" && <section className="page">
+        <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
+        <p className="eyebrow">SCHEDULE & EVENTS</p>
+        <div className="list-heading" style={{marginBottom: "8px"}}>
+          <div>
+            <h1 style={{marginBottom: "2px"}}>カレンダー</h1>
+            <p className="muted" style={{margin: 0}}>会議・準備・当日のスケジュールを管理します。</p>
+          </div>
+          <button className="primary small" onClick={()=>openNewEventModal(selectedDate)}>
+            <Plus size={16}/> 予定を追加
+          </button>
+        </div>
+
+        <div className="notice-card" style={{padding: "14px"}}>
+          <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px"}}>
+            <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
+              <strong style={{fontSize: "16px"}}>
+                {currentMonth.getFullYear()}年 {currentMonth.getMonth() + 1}月
+              </strong>
+              <button
+                type="button"
+                className="secondary small"
+                style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "4px 8px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}}
+                onClick={()=>{
+                  const now = new Date();
+                  setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+                  setSelectedDate(formatDateKey(now));
+                }}
+              >
+                今日
+              </button>
+            </div>
+            <div style={{display: "flex", gap: "6px"}}>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="前の月"
+                onClick={()=>setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+              >
+                <ChevronLeft size={18}/>
+              </button>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="次の月"
+                onClick={()=>setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+              >
+                <ChevronRight size={18}/>
+              </button>
+            </div>
+          </div>
+
+          <div style={{display: "grid", gridTemplateColumns: "repeat(7, 1fr)", textAlign: "center", fontSize: "12px", fontWeight: 700, marginBottom: "6px"}}>
+            {["日","月","火","水","木","金","土"].map((w, idx) => (
+              <div
+                key={w}
+                style={{color: idx === 0 ? "#c63d3d" : idx === 6 ? "#24589c" : "#64748b", padding: "4px 0"}}
+              >
+                {w}
+              </div>
+            ))}
+          </div>
+
+          <div style={{display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px"}}>
+            {calendarCells.map(cell => {
+              if (cell.type === "empty") {
+                return <div key={cell.key} style={{height: "46px"}} />;
+              }
+              const isSelected = cell.key === selectedDate;
+              const isToday = cell.key === todayKey;
+              const dayColor = isSelected
+                ? "#ffffff"
+                : cell.dayOfWeek === 0
+                  ? "#c63d3d"
+                  : cell.dayOfWeek === 6
+                    ? "#24589c"
+                    : "#1e293b";
+
+              return (
+                <button
+                  type="button"
+                  key={cell.key}
+                  onClick={()=>setSelectedDate(cell.key)}
+                  style={{
+                    height: "46px",
+                    borderRadius: "10px",
+                    border: isToday && !isSelected ? "1.5px solid #203d64" : "1px solid transparent",
+                    background: isSelected ? "#203d64" : isToday ? "#eef3f9" : "transparent",
+                    color: dayColor,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "3px",
+                    cursor: "pointer",
+                    fontWeight: isToday || isSelected ? 700 : 500
+                  }}
+                >
+                  <span style={{fontSize: "13px", lineHeight: 1}}>{cell.day}</span>
+                  <span style={{
+                    width: "6px",
+                    height: "6px",
+                    borderRadius: "999px",
+                    background: cell.hasEvents ? (isSelected ? "#93c5fd" : "#203d64") : "transparent"
+                  }} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="list-heading">
+          <div>
+            <h2>{selectedDate} の予定</h2>
+            <small>{selectedDateEvents.length}件の予定</small>
+          </div>
+          <button className="primary small" onClick={()=>openNewEventModal(selectedDate)}>
+            <Plus size={15}/> この日に追加
+          </button>
+        </div>
+
+        <div className="file-list">
+          {selectedDateEvents.length === 0 ? (
+            <div className="empty">この日の予定はまだ登録されていません。</div>
+          ) : (
+            selectedDateEvents.map(ev => (
+              <div className="file-row" key={ev.id} style={{alignItems: "flex-start"}}>
+                <div className="file-icon"><CalendarDays/></div>
+                <div className="file-info">
+                  <strong>{ev.title}</strong>
+                  <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "3px"}}>
+                    <Clock size={13}/>
+                    {ev.startTime ? `${ev.startTime}${ev.endTime ? ` 〜 ${ev.endTime}` : ""}` : "終日 / 時間未定"}
+                  </small>
+                  {ev.location && (
+                    <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "2px"}}>
+                      <MapPin size={13}/> {ev.location}
+                    </small>
+                  )}
+                  <small style={{marginTop: "3px"}}>
+                    公開範囲: {ev.scope}{ev.targetTeam ? `（${ev.targetTeam}）` : ""}
+                  </small>
+                  {ev.note && <small className="file-note">{ev.note}</small>}
+                </div>
+                <button
+                  type="button"
+                  className="danger-outline small"
+                  aria-label="予定を削除"
+                  onClick={()=>deleteEvent(ev.id)}
+                >
+                  <Trash2 size={15}/>
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </section>}
 
@@ -448,12 +752,83 @@ export default function App() {
         <p className="fine-print">※引き継ぎ時は操作した利用者が受取人となり、貸出中状態のまま所持者のみが更新されます。</p>
       </section>}
 
-      {page !== "home" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && <section className="page">
+      {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && <section className="page">
         <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
-        <p className="eyebrow">YUPEI MOBILE</p><h1>{{calendar:"カレンダー",carts:"台車管理",lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
+        <p className="eyebrow">YUPEI MOBILE</p><h1>{{carts:"台車管理",lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
         <div className="placeholder"><ShieldCheck size={28}/><strong>未実装</strong><p>この機能は未実装です。</p></div>
       </section>}
     </main>
+
+    {showEventModal && <div className="modal-backdrop" onClick={()=>setShowEventModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head"><h2>予定を追加</h2><button className="icon-button" onClick={()=>setShowEventModal(false)}><X/></button></div>
+      <label className="field-label">予定名
+        <input
+          value={eventForm.title}
+          onChange={e=>setEventForm(v=>({...v, title: e.target.value}))}
+          placeholder="例：各局代表者会議"
+        />
+      </label>
+      <label className="field-label">日付
+        <input
+          type="date"
+          value={eventForm.date}
+          onChange={e=>setEventForm(v=>({...v, date: e.target.value}))}
+        />
+      </label>
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px"}}>
+        <label className="field-label">開始時間
+          <input
+            type="time"
+            value={eventForm.startTime}
+            onChange={e=>setEventForm(v=>({...v, startTime: e.target.value}))}
+          />
+        </label>
+        <label className="field-label">終了時間
+          <input
+            type="time"
+            value={eventForm.endTime}
+            onChange={e=>setEventForm(v=>({...v, endTime: e.target.value}))}
+          />
+        </label>
+      </div>
+      <label className="field-label">場所
+        <input
+          value={eventForm.location}
+          onChange={e=>setEventForm(v=>({...v, location: e.target.value}))}
+          placeholder="例：学生センターフリースペース / 4棟 301"
+        />
+      </label>
+      <label className="field-label">公開範囲（局）
+        <select
+          value={eventForm.scope}
+          onChange={e=>setEventForm(v=>({...v, scope: e.target.value, targetTeam: ""}))}
+        >
+          <option value="全体公開">全体公開</option>
+          {departments.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </label>
+      {availableTeamsForEvent.length > 0 && (
+        <label className="field-label">公開対象（班）
+          <select
+            value={eventForm.targetTeam}
+            onChange={e=>setEventForm(v=>({...v, targetTeam: e.target.value}))}
+          >
+            <option value="">{eventForm.scope} 全体</option>
+            {availableTeamsForEvent.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </label>
+      )}
+      <label className="field-label">メモ・備考（任意）
+        <textarea
+          value={eventForm.note}
+          onChange={e=>setEventForm(v=>({...v, note: e.target.value}))}
+          placeholder="集合時間や持ち物などの補足"
+        />
+      </label>
+      <button className="primary full" disabled={!eventForm.title.trim() || !eventForm.date} onClick={saveEvent}>
+        登録
+      </button>
+    </div></div>}
 
     {showMemberForm && <div className="modal-backdrop" onClick={()=>setShowMemberForm(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head"><h2>委員を追加</h2><button className="icon-button" onClick={()=>setShowMemberForm(false)}><X/></button></div>
