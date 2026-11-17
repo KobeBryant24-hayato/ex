@@ -54,6 +54,30 @@ const initialKeys = [
   { id: 22, name: "4棟 301", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] }
 ];
 
+const initialCarts = [
+  { id: 1, name: "雄飛台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 2, name: "雄飛台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 3, name: "雄飛台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 4, name: "学友会台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 5, name: "学友会台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 6, name: "学友会台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 7, name: "学友会台車 4", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 8, name: "かご台車 あいんつ（5）", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
+  { id: 9, name: "かご台車 つゔぁい", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
+  { id: 10, name: "ダスキン台車 11", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 11, name: "ダスキン台車 12", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 12, name: "ダスキン台車 13", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 13, name: "ダスキン台車 14", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 14, name: "ダスキン台車 15", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 15, name: "ダスキン台車 16", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 16, name: "ダスキン台車 17", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 17, name: "ダスキン台車 18", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 18, name: "ダスキン台車 19", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 19, name: "ダスキン台車 20", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 20, name: "ダスキン台車 21", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 21, name: "ダスキン台車 22", status: "保管中", holder: "-", location: "4棟前", history: [] }
+];
+
 const initialTeamsByDepartment = {
   "運営管理局": ["衛生班", "エポ班", "火器班", "ダスキン班", "デンポ班"],
   "ステージPA局": [],
@@ -188,6 +212,17 @@ function mapKeyRow(row) {
   };
 }
 
+function mapCartRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status || "保管中",
+    holder: row.holder || "-",
+    location: row.location || "雄飛室",
+    history: Array.isArray(row.history) ? row.history : []
+  };
+}
+
 export default function App() {
   const todayObj = new Date();
   const todayKey = formatDateKey(todayObj);
@@ -247,6 +282,7 @@ export default function App() {
     note: ""
   });
 
+  // 鍵管理 state
   const [keys, setKeys] = useState(() => Array.isArray(saved?.keys) ? saved.keys : initialKeys);
   const [showLentModal, setShowLentModal] = useState(false);
   const [selectedKeyDetail, setSelectedKeyDetail] = useState(null);
@@ -256,6 +292,18 @@ export default function App() {
   const [showKeyAddModal, setShowKeyAddModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyLocation, setNewKeyLocation] = useState("雄飛室・鍵ボックス");
+
+  // 台車管理 state
+  const [carts, setCarts] = useState(() => Array.isArray(saved?.carts) ? saved.carts : initialCarts);
+  const [showCartLentModal, setShowCartLentModal] = useState(false);
+  const [selectedCartDetail, setSelectedCartDetail] = useState(null);
+  const [isEditingCart, setIsEditingCart] = useState(false);
+  const [cartEditForm, setCartEditForm] = useState({ name: "", location: "" });
+  const [cartSearch, setCartSearch] = useState("");
+  const [showCartAddModal, setShowCartAddModal] = useState(false);
+  const [newCartName, setNewCartName] = useState("");
+  const [newCartLocation, setNewCartLocation] = useState("雄飛室");
+
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState(null);
   const [scope, setScope] = useState("全体公開");
@@ -295,12 +343,17 @@ export default function App() {
     let active = true;
 
     async function syncFromSupabase() {
-      const [{ data: evRows, error: evErr }, { data: docRows, error: docErr }, { data: keyRows, error: keyErr }] =
-        await Promise.all([
-          supabase.from("events").select("*").order("id", { ascending: true }),
-          supabase.from("documents").select("*").order("updated", { ascending: false }),
-          supabase.from("keys").select("*").order("id", { ascending: true })
-        ]);
+      const [
+        { data: evRows, error: evErr },
+        { data: docRows, error: docErr },
+        { data: keyRows, error: keyErr },
+        { data: cartRows, error: cartErr }
+      ] = await Promise.all([
+        supabase.from("events").select("*").order("id", { ascending: true }),
+        supabase.from("documents").select("*").order("updated", { ascending: false }),
+        supabase.from("keys").select("*").order("id", { ascending: true }),
+        supabase.from("carts").select("*").order("id", { ascending: true })
+      ]);
 
       if (!active) return;
 
@@ -327,6 +380,14 @@ export default function App() {
           await supabase.from("keys").upsert(keys);
         }
       }
+
+      if (!cartErr && Array.isArray(cartRows)) {
+        if (cartRows.length > 0) {
+          setCarts(cartRows.map(mapCartRow));
+        } else {
+          await supabase.from("carts").upsert(carts);
+        }
+      }
     }
 
     syncFromSupabase();
@@ -344,6 +405,7 @@ export default function App() {
           docs: serializableDocs,
           events,
           keys,
+          carts,
           departments,
           teamsByDepartment,
           members,
@@ -353,7 +415,7 @@ export default function App() {
     } catch {
       // 無視
     }
-  }, [docs, events, keys, departments, teamsByDepartment, members, permissions]);
+  }, [docs, events, keys, carts, departments, teamsByDepartment, members, permissions]);
 
   const visibleDocs = useMemo(() => docs
     .filter(d => {
@@ -618,6 +680,7 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  // 鍵操作ヘルパー
   async function updateKeyRecord(nextKey) {
     setKeys(prev => prev.map(item => item.id === nextKey.id ? nextKey : item));
     if (selectedKeyDetail?.id === nextKey.id) {
@@ -662,6 +725,51 @@ export default function App() {
     setIsEditingKey(false);
   }
 
+  // 台車操作ヘルパー
+  async function updateCartRecord(nextCart) {
+    setCarts(prev => prev.map(item => item.id === nextCart.id ? nextCart : item));
+    if (selectedCartDetail?.id === nextCart.id) {
+      setSelectedCartDetail(nextCart);
+    }
+    if (supabase) {
+      await supabase.from("carts").upsert(nextCart);
+    }
+  }
+
+  function openCartDetailModal(cartObj) {
+    setSelectedCartDetail(cartObj);
+    setCartEditForm({
+      name: cartObj.name || "",
+      location: cartObj.location || ""
+    });
+    setIsEditingCart(false);
+  }
+
+  function closeCartDetailModal() {
+    setSelectedCartDetail(null);
+    setIsEditingCart(false);
+  }
+
+  async function saveCartInfo() {
+    if (!selectedCartDetail || !cartEditForm.name.trim()) return;
+    const trimmedName = cartEditForm.name.trim();
+    const trimmedLocation = cartEditForm.location.trim() || "雄飛室";
+    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+
+    const updatedCart = {
+      ...selectedCartDetail,
+      name: trimmedName,
+      location: selectedCartDetail.status === "保管中" ? trimmedLocation : selectedCartDetail.location,
+      history: [
+        { time: nowStr, action: `情報編集（${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
+        ...(selectedCartDetail.history || [])
+      ]
+    };
+
+    await updateCartRecord(updatedCart);
+    setIsEditingCart(false);
+  }
+
   const menuItems = [
     [CalendarDays, "カレンダー", "calendar"],
     [KeyRound, "鍵管理", "keys"],
@@ -677,7 +785,7 @@ export default function App() {
       <button
         type="button"
         className="brand-home-button"
-        onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); }}
+        onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); closeCartDetailModal(); }}
         aria-label="ホームへ戻る"
       >
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -965,7 +1073,7 @@ export default function App() {
         <div className="placeholder">
           <ShieldCheck size={26}/>
           <strong>{supabase ? "Supabaseクラウド同期 有効" : "ローカル保存モード"}</strong>
-          <p>{supabase ? "予定・資料・鍵データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
+          <p>{supabase ? "予定・資料・鍵・台車データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
         </div>
       </section>}
 
@@ -1165,9 +1273,94 @@ export default function App() {
         </div>
       </section>}
 
-      {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && <section className="page">
+      {page === "carts" && <section className="page">
         <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
-        <p className="eyebrow">YUPEI MOBILE</p><h1>{{carts:"台車管理",lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
+        <p className="eyebrow">CART MANAGEMENT</p>
+        <h1>台車管理</h1>
+        <div className="notice-card" style={{marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: carts.filter(c => c.status === "貸出中").length > 0 ? "pointer" : "default"}} onClick={()=>{
+          if (carts.filter(c => c.status === "貸出中").length > 0) setShowCartLentModal(true);
+        }}>
+          <div>
+            <strong>現在の貸出状況</strong>
+            <p style={{margin: "4px 0 0"}}>保管中: {carts.filter(c => c.status === "保管中").length}台 ／ 全{carts.length}台</p>
+            {carts.filter(c => c.status === "貸出中").length > 0 && <small style={{color: "#203d64", fontWeight: 700, display: "inline-block", marginTop: "4px"}}>詳細を確認（貸出中の台車と使用者）</small>}
+          </div>
+          <div style={{textAlign: "right"}}>
+            <span style={{fontSize: "11px", color: "#a34343", fontWeight: 700, display: "block"}}>貸出中</span>
+            <strong style={{fontSize: "24px", color: "#a34343"}}>{carts.filter(c => c.status === "貸出中").length}<span style={{fontSize: "12px", marginLeft: "2px"}}>台</span></strong>
+          </div>
+        </div>
+        <p className="muted">台車の保管・貸出状況の確認、および借受・返却・引き継ぎを行います。</p>
+
+        <div className="list-heading">
+          <div><h2>台車一覧</h2><small>{carts.filter(c => c.name.toLowerCase().includes(cartSearch.toLowerCase())).length}台の台車</small></div>
+          <button className="primary small" onClick={()=>setShowCartAddModal(true)}><Plus size={16}/> 台車を追加</button>
+        </div>
+        <div className="searchbox"><Search size={18}/><input value={cartSearch} onChange={e=>setCartSearch(e.target.value)} placeholder="台車の名前・番号で検索（例：雄飛台車、ダスキン、あいんつ）"/></div>
+
+        <div className="file-list">
+          {carts.filter(c => c.name.toLowerCase().includes(cartSearch.toLowerCase())).map(c => <div className="file-row" key={c.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>openCartDetailModal(c)}>
+            <div className="file-icon"><Truck/></div>
+            <div className="file-info">
+              <strong>{c.name}</strong>
+              <small>状態: <span style={{color: c.status === "保管中" ? "#2b6843" : "#a34343", fontWeight: 700}}>{c.status}</span></small>
+              <small>{c.status === "貸出中" ? `使用者: ${c.holder}` : `保管場所: ${c.location}`}</small>
+              <small style={{color: "#666", marginTop: "2px"}}>
+                {c.history && c.history.length > 0
+                  ? `最終操作: ${c.history[0].time} ${c.history[0].action}`
+                  : "履歴なし（初期状態）"}
+              </small>
+            </div>
+            <div style={{display: "flex", gap: "6px"}} onClick={e=>e.stopPropagation()}>
+              {c.status === "保管中" ? (
+                <button className="primary small" onClick={async ()=>{
+                  if (!window.confirm(`「${c.name}」の台車を借りますか？`)) return;
+                  const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                  await updateCartRecord({
+                    ...c,
+                    status: "貸出中",
+                    holder: "ログインユーザー",
+                    history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(c.history || [])]
+                  });
+                }}>借りる</button>
+              ) : (
+                <>
+                  <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "white", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}} onClick={async ()=>{
+                    if (!window.confirm(`「${c.name}」の台車を引き継ぎますか？`)) return;
+                    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                    await updateCartRecord({
+                      ...c,
+                      status: "貸出中",
+                      holder: "ログインユーザー",
+                      history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(c.history || [])]
+                    });
+                  }}>引き継ぐ</button>
+                  <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
+                    if (!window.confirm(`「${c.name}」の台車を返却しますか？`)) return;
+                    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                    const defaultReturnLocation = c.name.includes("ダスキン")
+                      ? "4棟前"
+                      : c.name.includes("かご台車") || c.name.includes("あいんつ") || c.name.includes("つゔぁい")
+                        ? "学セン階段下"
+                        : c.location || "雄飛室";
+                    await updateCartRecord({
+                      ...c,
+                      status: "保管中",
+                      holder: "-",
+                      location: defaultReturnLocation,
+                      history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(c.history || [])]
+                    });
+                  }}>返す</button>
+                </>
+              )}
+            </div>
+          </div>)}
+        </div>
+      </section>}
+
+      {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && page !== "carts" && <section className="page">
+        <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
+        <p className="eyebrow">YUPEI MOBILE</p><h1>{{lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
         <div className="placeholder"><ShieldCheck size={28}/><strong>未実装</strong><p>この機能は未実装です。</p></div>
       </section>}
     </main>
@@ -1309,6 +1502,7 @@ export default function App() {
       <div className="comment-entry"><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメントを入力"/><button className="primary" onClick={addComment} disabled={!comment.trim()}>送信</button></div>
     </div></div>}
 
+    {/* 鍵の貸出中一覧モーダル */}
     {showLentModal && <div className="modal-backdrop" onClick={()=>setShowLentModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
         <h2>貸出中の鍵一覧</h2>
@@ -1336,6 +1530,7 @@ export default function App() {
       <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setShowLentModal(false)}>閉じる</button>
     </div></div>}
 
+    {/* 鍵の詳細・編集モーダル */}
     {selectedKeyDetail && <div className="modal-backdrop" onClick={closeKeyDetailModal}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
         <h2>{selectedKeyDetail.name} の詳細</h2>
@@ -1343,28 +1538,26 @@ export default function App() {
       </div>
 
       {!isEditingKey ? (
-        <>
-          <div className="notice-card" style={{margin: "12px 0"}}>
-            <p style={{margin: 0}}>状態: <strong style={{color: selectedKeyDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedKeyDetail.status}</strong></p>
-            <p style={{margin: "4px 0 0"}}>所持者 / 保管場所: <strong>{selectedKeyDetail.status === "貸出中" ? selectedKeyDetail.holder : selectedKeyDetail.location}</strong></p>
-            <div style={{marginTop: "10px"}}>
-              <button
-                type="button"
-                className="secondary small"
-                style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
-                onClick={()=>{
-                  setKeyEditForm({
-                    name: selectedKeyDetail.name || "",
-                    location: selectedKeyDetail.location || ""
-                  });
-                  setIsEditingKey(true);
-                }}
-              >
-                <Pencil size={13}/> 名前・保管場所を編集
-              </button>
-            </div>
+        <div className="notice-card" style={{margin: "12px 0"}}>
+          <p style={{margin: 0}}>状態: <strong style={{color: selectedKeyDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedKeyDetail.status}</strong></p>
+          <p style={{margin: "4px 0 0"}}>所持者 / 保管場所: <strong>{selectedKeyDetail.status === "貸出中" ? selectedKeyDetail.holder : selectedKeyDetail.location}</strong></p>
+          <div style={{marginTop: "10px"}}>
+            <button
+              type="button"
+              className="secondary small"
+              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+              onClick={()=>{
+                setKeyEditForm({
+                  name: selectedKeyDetail.name || "",
+                  location: selectedKeyDetail.location || ""
+                });
+                setIsEditingKey(true);
+              }}
+            >
+              <Pencil size={13}/> 名前・保管場所を編集
+            </button>
           </div>
-        </>
+        </div>
       ) : (
         <div className="notice-card" style={{margin: "12px 0"}}>
           <label className="field-label" style={{marginTop: 0}}>鍵の名前
@@ -1426,6 +1619,7 @@ export default function App() {
       <button className="primary full" style={{marginTop: "16px"}} onClick={closeKeyDetailModal}>閉じる</button>
     </div></div>}
 
+    {/* 新しい鍵を追加モーダル */}
     {showKeyAddModal && <div className="modal-backdrop" onClick={()=>setShowKeyAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
         <h2>新しい鍵を追加</h2>
@@ -1451,6 +1645,153 @@ export default function App() {
         setNewKeyName("");
         setNewKeyLocation("雄飛室・鍵ボックス");
         setShowKeyAddModal(false);
+        alert("保存しました。");
+      }}>登録</button>
+    </div></div>}
+
+    {/* 台車の貸出中一覧モーダル */}
+    {showCartLentModal && <div className="modal-backdrop" onClick={()=>setShowCartLentModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>貸出中の台車一覧</h2>
+        <button className="icon-button" onClick={()=>setShowCartLentModal(false)}><X/></button>
+      </div>
+      <p className="muted">現在貸出中となっている台車と使用者の情報です。</p>
+      <div className="file-list" style={{maxHeight: "350px", overflowY: "auto", marginTop: "12px"}}>
+        {carts.filter(c => c.status === "貸出中").length === 0 ? (
+          <div className="empty">現在貸出中の台車はありません。</div>
+        ) : (
+          carts.filter(c => c.status === "貸出中").map(c => (
+            <div className="file-row" key={c.id} style={{flexDirection: "column", alignItems: "flex-start", gap: "4px"}}>
+              <div style={{display: "flex", width: "100%", justifyContent: "space-between", alignItems: "center"}}>
+                <strong>{c.name}</strong>
+                <span style={{fontSize: "12px", color: "#a34343", fontWeight: 700}}>貸出中</span>
+              </div>
+              <small>使用者: <strong>{c.holder}</strong></small>
+              {c.history && c.history.length > 0 && (
+                <small style={{color: "#555"}}>直近の操作: {c.history[0].time} {c.history[0].action}</small>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setShowCartLentModal(false)}>閉じる</button>
+    </div></div>}
+
+    {/* 台車の詳細・編集モーダル */}
+    {selectedCartDetail && <div className="modal-backdrop" onClick={closeCartDetailModal}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>{selectedCartDetail.name} の詳細</h2>
+        <button className="icon-button" onClick={closeCartDetailModal}><X/></button>
+      </div>
+
+      {!isEditingCart ? (
+        <div className="notice-card" style={{margin: "12px 0"}}>
+          <p style={{margin: 0}}>状態: <strong style={{color: selectedCartDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedCartDetail.status}</strong></p>
+          <p style={{margin: "4px 0 0"}}>使用者 / 保管場所: <strong>{selectedCartDetail.status === "貸出中" ? selectedCartDetail.holder : selectedCartDetail.location}</strong></p>
+          <div style={{marginTop: "10px"}}>
+            <button
+              type="button"
+              className="secondary small"
+              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+              onClick={()=>{
+                setCartEditForm({
+                  name: selectedCartDetail.name || "",
+                  location: selectedCartDetail.location || ""
+                });
+                setIsEditingCart(true);
+              }}
+            >
+              <Pencil size={13}/> 名前・保管場所を編集
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="notice-card" style={{margin: "12px 0"}}>
+          <label className="field-label" style={{marginTop: 0}}>台車の名前・番号
+            <input
+              value={cartEditForm.name}
+              onChange={e=>setCartEditForm(v=>({...v, name: e.target.value}))}
+              placeholder="例：ダスキン台車 18"
+            />
+          </label>
+          <label className="field-label">保管場所
+            <input
+              value={cartEditForm.location}
+              onChange={e=>setCartEditForm(v=>({...v, location: e.target.value}))}
+              placeholder="例：4棟前 / 雄飛室 / 学セン階段下"
+            />
+          </label>
+          {selectedCartDetail.status === "貸出中" && (
+            <small style={{display: "block", color: "#64748b", marginTop: "6px"}}>
+              ※現在貸出中のため、返却時の保管場所として反映されます。
+            </small>
+          )}
+          <div style={{display: "flex", gap: "8px", marginTop: "12px"}}>
+            <button
+              type="button"
+              className="primary small"
+              disabled={!cartEditForm.name.trim()}
+              onClick={saveCartInfo}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="secondary small"
+              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}}
+              onClick={()=>setIsEditingCart(false)}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
+      <h3 style={{fontSize: "14px", margin: "16px 0 8px"}}>操作履歴（日時・アクション）</h3>
+      <div className="file-list" style={{maxHeight: "250px", overflowY: "auto"}}>
+        {!selectedCartDetail.history || selectedCartDetail.history.length === 0 ? (
+          <div className="empty">操作履歴はありません。</div>
+        ) : (
+          selectedCartDetail.history.map((h, i) => (
+            <div className="file-row" key={i} style={{padding: "8px 12px"}}>
+              <div className="file-icon"><Truck size={16}/></div>
+              <div className="file-info">
+                <strong>{h.action}</strong>
+                <small>{h.time} ・ {h.user}</small>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      <button className="primary full" style={{marginTop: "16px"}} onClick={closeCartDetailModal}>閉じる</button>
+    </div></div>}
+
+    {/* 新しい台車を追加モーダル */}
+    {showCartAddModal && <div className="modal-backdrop" onClick={()=>setShowCartAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>新しい台車を追加</h2>
+        <button className="icon-button" onClick={()=>setShowCartAddModal(false)}><X/></button>
+      </div>
+      <label className="field-label">台車の名前・番号<input value={newCartName} onChange={e=>setNewCartName(e.target.value)} placeholder="例：火器台車 13 / 雄飛台車 4"/></label>
+      <label className="field-label">保管場所<input value={newCartLocation} onChange={e=>setNewCartLocation(e.target.value)} placeholder="例：雄飛室 / 4棟前 / 学セン階段下"/></label>
+      <button className="primary full" disabled={!newCartName.trim()} onClick={async ()=>{
+        const name = newCartName.trim();
+        const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+        const newCart = {
+          id: Date.now(),
+          name,
+          status: "保管中",
+          holder: "-",
+          location: newCartLocation.trim() || "雄飛室",
+          history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
+        };
+        setCarts(prev => [newCart, ...prev]);
+        if (supabase) {
+          await supabase.from("carts").insert(newCart);
+        }
+        setNewCartName("");
+        setNewCartLocation("雄飛室");
+        setShowCartAddModal(false);
         alert("保存しました。");
       }}>登録</button>
     </div></div>}
