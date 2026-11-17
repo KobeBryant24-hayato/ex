@@ -4,7 +4,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, MapPin, Clock, Pencil, Eye
+  CalendarCog, ChevronRight, MapPin, Clock, Pencil, ExternalLink
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
@@ -103,127 +103,6 @@ function fileIcon(name) {
   return <FileText />;
 }
 
-function DocPreviewBox({ doc }) {
-  const [textPreview, setTextPreview] = useState("");
-  const [objectUrl, setObjectUrl] = useState("");
-
-  const ext = getExtension(doc?.name);
-  const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext) || doc?.file?.type?.startsWith("image/");
-  const isPdf = ext === "pdf" || doc?.file?.type === "application/pdf";
-  const isText = ["txt", "csv", "md", "json", "log"].includes(ext) || doc?.file?.type?.startsWith("text/");
-
-  useEffect(() => {
-    setTextPreview("");
-    if (!doc?.file) {
-      setObjectUrl("");
-      return;
-    }
-
-    const url = URL.createObjectURL(doc.file);
-    setObjectUrl(url);
-
-    if (isText) {
-      doc.file.text().then(txt => {
-        setTextPreview(txt.slice(0, 4000));
-      }).catch(() => {
-        setTextPreview("");
-      });
-    }
-
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [doc, isText]);
-
-  if (!doc) return null;
-
-  if (!doc.file) {
-    return (
-      <div style={{
-        background: "#f1f5f9",
-        border: "1px solid #e2e8f0",
-        borderRadius: "10px",
-        padding: "12px",
-        marginTop: "10px",
-        fontSize: "12px",
-        color: "#475569"
-      }}>
-        この資料のファイル実体はブラウザメモリ上にありません（サンプル資料または再読み込み前のデータ）。新しくアップロードした資料は、再読み込みするまでそのままブラウザ上でプレビューできます。
-      </div>
-    );
-  }
-
-  if (isImage && objectUrl) {
-    return (
-      <div style={{
-        marginTop: "12px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-        padding: "10px",
-        background: "#f8fafc",
-        textAlign: "center"
-      }}>
-        <img
-          src={objectUrl}
-          alt={doc.name}
-          style={{ maxWidth: "100%", maxHeight: "320px", borderRadius: "8px", objectFit: "contain" }}
-        />
-      </div>
-    );
-  }
-
-  if (isPdf && objectUrl) {
-    return (
-      <div style={{
-        marginTop: "12px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-        overflow: "hidden",
-        background: "#f8fafc"
-      }}>
-        <iframe
-          src={objectUrl}
-          title={doc.name}
-          style={{ width: "100%", height: "320px", border: "none", display: "block" }}
-        />
-      </div>
-    );
-  }
-
-  if (isText) {
-    return (
-      <pre style={{
-        marginTop: "12px",
-        border: "1px solid #e2e8f0",
-        borderRadius: "12px",
-        padding: "12px",
-        background: "#f8fafc",
-        fontSize: "12px",
-        maxHeight: "260px",
-        overflow: "auto",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-word"
-      }}>
-        {textPreview || "読み込み中..."}
-      </pre>
-    );
-  }
-
-  return (
-    <div style={{
-      background: "#f1f5f9",
-      border: "1px solid #e2e8f0",
-      borderRadius: "10px",
-      padding: "12px",
-      marginTop: "10px",
-      fontSize: "12px",
-      color: "#475569"
-    }}>
-      「{ext || "この"}」形式はブラウザ内の簡易プレビュー非対応です。必要に応じて右の「ダウンロード」から開いてください。
-    </div>
-  );
-}
-
 export default function App() {
   const todayObj = new Date();
   const todayKey = formatDateKey(todayObj);
@@ -238,7 +117,6 @@ export default function App() {
   );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
-  const [previewDoc, setPreviewDoc] = useState(null);
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -343,7 +221,6 @@ export default function App() {
     }
   }, [docs, events, keys, departments, teamsByDepartment, members, permissions]);
 
-  // 公開範囲（局）と現在選択中のタブに一致する資料を表示
   const visibleDocs = useMemo(() => docs
     .filter(d => {
       if (section === "委員会活動全体") {
@@ -509,11 +386,23 @@ export default function App() {
     if (!window.confirm("この資料を完全に削除しますか？この操作は取り消せません。")) return;
     setDocs(prev => prev.filter(d => d.id !== id));
     if (selected?.id === id) setSelected(null);
-    if (previewDoc?.id === id) setPreviewDoc(null);
+  }
+
+  function openInBrowserTab(doc) {
+    if (!doc.file) {
+      alert("この端末のブラウザメモリにファイル実体がないため開けません。別の端末（PC・スマホ）で共有したり再読み込み後も開いたりするにはSupabase連携が必要です。");
+      return;
+    }
+    const url = URL.createObjectURL(doc.file);
+    window.open(url, "_blank", "noopener,noreferrer");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
   function downloadDoc(doc) {
-    if (!doc.file) { alert("サンプル資料または再読み込み前の資料のため、この画面単体ではダウンロードできません。Supabase連携後に利用可能になります。"); return; }
+    if (!doc.file) {
+      alert("この端末のブラウザメモリにファイル実体がないためダウンロードできません。別の端末（PC・スマホ）で共有したり再読み込み後も開いたりするにはSupabase連携が必要です。");
+      return;
+    }
     const url = URL.createObjectURL(doc.file);
     const a = document.createElement("a"); a.href = url; a.download = doc.name; a.click();
     URL.revokeObjectURL(url);
@@ -534,7 +423,7 @@ export default function App() {
       <button
         type="button"
         className="brand-home-button"
-        onClick={() => { setPage("home"); setSelected(null); setPreviewDoc(null); setSelectedKeyDetail(null); }}
+        onClick={() => { setPage("home"); setSelected(null); setSelectedKeyDetail(null); }}
         aria-label="ホームへ戻る"
       >
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -791,9 +680,9 @@ export default function App() {
                   gap: "4px",
                   flexShrink: 0
                 }}
-                onClick={e=>{e.stopPropagation(); setPreviewDoc(doc);}}
+                onClick={e=>{e.stopPropagation(); openInBrowserTab(doc);}}
               >
-                <Eye size={14}/> プレビュー
+                <ExternalLink size={14}/> 開く
               </button>
             </div>
           ))}
@@ -821,8 +710,8 @@ export default function App() {
         </div>
         <div className="placeholder">
           <ShieldCheck size={26}/>
-          <strong>ブラウザ保存有効中（試作版）</strong>
-          <p>このブラウザ内のデータは自動保存されます。複数人で共有・永続保存するにはSupabase連携が必要です。</p>
+          <strong>端末ローカル保存中（試作版）</strong>
+          <p>データは開いている端末のブラウザ内に保存されます。PCとスマホなど複数端末で共有するにはSupabase連携が必要です。</p>
         </div>
       </section>}
 
@@ -849,7 +738,7 @@ export default function App() {
             </label>)}
           </div>
         </div>)}
-        <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有にはSupabase連携が必要です。</p>
+        <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有にはSupabase連携が必要です。</p>
       </section>}
 
       {page === "admin-members" && <section className="page">
@@ -873,7 +762,7 @@ export default function App() {
             <button className="danger-outline member-toggle" onClick={()=>setMembers(prev=>prev.map(m=>m.id===member.id?{...m,active:!m.active}:m))}>{member.active ? "停止" : "再開"}</button>
           </div>)}
         </div>
-        <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有や招待メール送信はSupabase連携後に有効になります。</p>
+        <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有や招待メール送信はSupabase連携後に有効になります。</p>
       </section>}
 
       {page === "admin-structure" && <section className="page">
@@ -1119,7 +1008,7 @@ export default function App() {
         setMemberForm({name:"",email:"",dept:"運営管理局",team:"",role:"委員"});setShowMemberForm(false);
         alert("登録しました。");
       }}>登録</button>
-      <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有や招待メール送信はSupabase連携後に有効になります。</p>
+      <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有や招待メール送信はSupabase連携後に有効になります。</p>
     </div></div>}
 
     {showUpload && <div className="modal-backdrop" onClick={()=>setShowUpload(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1150,25 +1039,6 @@ export default function App() {
       <p className="fine-print">※選択した公開範囲（局・班）に従って登録され、該当の局タブや全体公開に表示されます。</p>
     </div></div>}
 
-    {previewDoc && <div className="modal-backdrop" onClick={()=>setPreviewDoc(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head">
-        <h2>プレビュー</h2>
-        <button className="icon-button" onClick={()=>setPreviewDoc(null)}><X/></button>
-      </div>
-      <div className="detail-file">
-        <div className="file-icon large">{fileIcon(previewDoc.name)}</div>
-        <div>
-          <strong>{previewDoc.name}</strong>
-          <small>公開範囲: {previewDoc.scope}{previewDoc.targetTeam ? `（${previewDoc.targetTeam}）` : ""}</small>
-        </div>
-      </div>
-      <DocPreviewBox doc={previewDoc} />
-      <div className="detail-actions" style={{marginTop: "14px"}}>
-        <button className="primary" onClick={()=>downloadDoc(previewDoc)}><Download size={17}/> ダウンロード</button>
-        <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}} onClick={()=>{setSelected(previewDoc); setPreviewDoc(null);}}>詳細・コメント</button>
-      </div>
-    </div></div>}
-
     {selected && <div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head"><h2>資料の詳細</h2><button className="icon-button" onClick={()=>setSelected(null)}><X/></button></div>
       <div className="detail-file">
@@ -1178,9 +1048,12 @@ export default function App() {
           <small>{selected.dept} ・ {selected.scope}{selected.targetTeam ? `（${selected.targetTeam}）` : ""}</small>
         </div>
       </div>
-      <DocPreviewBox doc={selected} />
       {selected.note && <p className="detail-note">{selected.note}</p>}
-      <div className="detail-actions"><button className="primary" onClick={()=>downloadDoc(selected)}><Download size={17}/> ダウンロード</button><button className="danger-outline" onClick={()=>removeDoc(selected.id)}><Trash2 size={17}/> 削除</button></div>
+      <div className="detail-actions" style={{flexWrap: "wrap"}}>
+        <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"}} onClick={()=>openInBrowserTab(selected)}><ExternalLink size={16}/> ブラウザで開く</button>
+        <button className="primary" onClick={()=>downloadDoc(selected)}><Download size={17}/> ダウンロード</button>
+        <button className="danger-outline" onClick={()=>removeDoc(selected.id)}><Trash2 size={17}/> 削除</button>
+      </div>
       <h3 className="comments-title">コメント ({selected.comments.length})</h3>
       <div className="comments">{selected.comments.map((c,i)=><div className="comment" key={i}><p>{c}</p><small>ログインユーザー</small></div>)}</div>
       <div className="comment-entry"><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメントを入力"/><button className="primary" onClick={addComment} disabled={!comment.trim()}>送信</button></div>
