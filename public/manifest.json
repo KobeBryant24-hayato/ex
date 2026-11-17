@@ -1,0 +1,15 @@
+{
+  "name": "YUPEI MOBILE - 雄飛祭実行委員会",
+  "short_name": "ゆーぺいモバイル",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#182b49",
+  "theme_color": "#182b49",
+  "icons": [
+    {
+      "src": "/yupei.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
