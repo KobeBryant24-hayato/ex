@@ -157,9 +157,10 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
-  const nav = [
-    [Home, "ホーム", "home"], [CalendarDays, "カレンダー", "calendar"],
-    [KeyRound, "鍵管理", "keys"], [FolderOpen, "資料共有", "documents"],
+  const menuItems = [
+    [CalendarDays, "カレンダー", "calendar"],
+    [KeyRound, "鍵管理", "keys"],
+    [FolderOpen, "資料共有", "documents"],
     [Truck, "台車管理", "carts"]
   ];
 
@@ -173,7 +174,7 @@ export default function App() {
         onClick={() => { setPage("home"); setSelected(null); setSelectedKeyDetail(null); }}
         aria-label="ホームへ戻る"
       >
-        <img src="/yupei.png" alt="ゆーぺいくん" className="brand-mascot" />
+        <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
         <div className="brand-text">
           <div className="brand-name">YUPEI MOBILE</div>
           <div className="brand-sub">雄飛祭実行委員会</div>
@@ -190,7 +191,7 @@ export default function App() {
         <div className="notice-card"><strong>資料共有のテスト運用について</strong><p>新しい資料共有画面の動作確認を実施中です。</p><small>サンプル通知</small></div>
         <h3 className="menu-title">メニュー</h3>
         <div className="menu-grid">
-          {nav.slice(1).map(([Icon,label,key]) => <button className="menu-tile" key={key} onClick={()=>setPage(key)}><Icon/><span>{label}</span></button>)}
+          {menuItems.map(([Icon,label,key]) => <button className="menu-tile" key={key} onClick={()=>setPage(key)}><Icon/><span>{label}</span></button>)}
           <button className="menu-tile" onClick={()=>setPage("lost")}><Search/><span>落とし物</span></button>
           <button className="menu-tile" onClick={()=>setPage("inquiry")}><MessageCircle/><span>問い合わせ</span></button>
           <button className="menu-tile" onClick={()=>setPage("admin")}><Settings/><span>管理者設定</span></button>
@@ -453,10 +454,6 @@ export default function App() {
         <div className="placeholder"><ShieldCheck size={28}/><strong>未実装</strong><p>この機能は未実装です。</p></div>
       </section>}
     </main>
-
-    <nav className="bottom-nav">
-      {nav.map(([Icon,label,key])=><button key={key} className={page===key?"current":""} onClick={()=>setPage(key)}><Icon size={24}/><span>{label}</span></button>)}
-    </nav>
 
     {showMemberForm && <div className="modal-backdrop" onClick={()=>setShowMemberForm(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head"><h2>委員を追加</h2><button className="icon-button" onClick={()=>setShowMemberForm(false)}><X/></button></div>
