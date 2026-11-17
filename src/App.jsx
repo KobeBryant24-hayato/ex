@@ -5,7 +5,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, MapPin, Clock, Pencil, ExternalLink
+  CalendarCog, ChevronRight, MapPin, Clock, Pencil, ExternalLink, CalendarPlus
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
@@ -56,7 +56,7 @@ const initialKeys = [
 
 const initialCartCategories = [
   "雄飛台車",
-  "学友会台車",
+  "学友台車",
   "かご台車",
   "ダスキン台車"
 ];
@@ -65,10 +65,10 @@ const initialCarts = [
   { id: 1, category: "雄飛台車", name: "雄飛台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
   { id: 2, category: "雄飛台車", name: "雄飛台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
   { id: 3, category: "雄飛台車", name: "雄飛台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 4, category: "学友会台車", name: "学友会台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 5, category: "学友会台車", name: "学友会台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 6, category: "学友会台車", name: "学友会台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 7, category: "学友会台車", name: "学友会台車 4", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 4, category: "学友台車", name: "学友台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 5, category: "学友台車", name: "学友台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 6, category: "学友台車", name: "学友台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 7, category: "学友台車", name: "学友台車 4", status: "保管中", holder: "-", location: "雄飛室", history: [] },
   { id: 8, category: "かご台車", name: "かご台車 あいんつ（5）", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
   { id: 9, category: "かご台車", name: "かご台車 つゔぁい", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
   { id: 10, category: "ダスキン台車", name: "ダスキン台車 11", status: "保管中", holder: "-", location: "4棟前", history: [] },
@@ -112,9 +112,14 @@ const initialPermissions = {
   "事務課": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true}
 };
 
+function normalizeCartCategoryName(cat = "") {
+  if (cat === "学友会台車") return "学友台車";
+  return cat;
+}
+
 function inferCartCategory(name = "") {
   if (name.includes("雄飛")) return "雄飛台車";
-  if (name.includes("学友")) return "学友会台車";
+  if (name.includes("学友")) return "学友台車";
   if (name.includes("かご") || name.includes("あいんつ") || name.includes("つゔぁい")) return "かご台車";
   if (name.includes("ダスキン")) return "ダスキン台車";
   return "その他";
@@ -149,6 +154,109 @@ function fileIcon(name) {
   if (["mp3","wav","m4a"].includes(ext)) return <Music />;
   if (["mp4","mov"].includes(ext)) return <Video />;
   return <FileText />;
+}
+
+// Googleカレンダー追加URL生成
+function buildGoogleCalendarUrl(ev) {
+  const dateCompact = (ev.date || "").replace(/-/g, "");
+  let datesParam = "";
+
+  if (ev.startTime) {
+    const startCompact = ev.startTime.replace(":", "") + "00";
+    let endCompact = "";
+    if (ev.endTime) {
+      endCompact = ev.endTime.replace(":", "") + "00";
+    } else {
+      const [hh, mm] = ev.startTime.split(":").map(Number);
+      const nextH = String((hh + 1) % 24).padStart(2, "0");
+      endCompact = `${nextH}${String(mm || 0).padStart(2, "0")}00`;
+    }
+    datesParam = `${dateCompact}T${startCompact}/${dateCompact}T${endCompact}`;
+  } else {
+    const [y, m, d] = (ev.date || "").split("-").map(Number);
+    const nextDay = new Date(y, (m || 1) - 1, (d || 1) + 1);
+    const nextCompact = formatDateKey(nextDay).replace(/-/g, "");
+    datesParam = `${dateCompact}/${nextCompact}`;
+  }
+
+  const scopeLabel = `公開範囲: ${ev.scope}${ev.targetTeam ? `（${ev.targetTeam}）` : ""}`;
+  const detailsText = [ev.note, scopeLabel, "YUPEI MOBILE（雄飛祭実行委員会）"].filter(Boolean).join("\n");
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: ev.title || "雄飛祭 予定",
+    dates: datesParam,
+    details: detailsText,
+    location: ev.location || "",
+    ctz: "Asia/Tokyo"
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+// iPhone純正カレンダー・Appleカレンダー用 .ics ダウンロード
+function downloadEventIcs(ev) {
+  const escapeIcs = (str = "") =>
+    String(str)
+      .replace(/\\/g, "\\\\")
+      .replace(/;/g, "\\;")
+      .replace(/,/g, "\\,")
+      .replace(/\r?\n/g, "\\n");
+
+  const dateCompact = (ev.date || "").replace(/-/g, "");
+  let dtStartLine = "";
+  let dtEndLine = "";
+
+  if (ev.startTime) {
+    const startCompact = ev.startTime.replace(":", "") + "00";
+    let endCompact = "";
+    if (ev.endTime) {
+      endCompact = ev.endTime.replace(":", "") + "00";
+    } else {
+      const [hh, mm] = ev.startTime.split(":").map(Number);
+      const nextH = String((hh + 1) % 24).padStart(2, "0");
+      endCompact = `${nextH}${String(mm || 0).padStart(2, "0")}00`;
+    }
+    dtStartLine = `DTSTART;TZID=Asia/Tokyo:${dateCompact}T${startCompact}`;
+    dtEndLine = `DTEND;TZID=Asia/Tokyo:${dateCompact}T${endCompact}`;
+  } else {
+    const [y, m, d] = (ev.date || "").split("-").map(Number);
+    const nextDay = new Date(y, (m || 1) - 1, (d || 1) + 1);
+    const nextCompact = formatDateKey(nextDay).replace(/-/g, "");
+    dtStartLine = `DTSTART;VALUE=DATE:${dateCompact}`;
+    dtEndLine = `DTEND;VALUE=DATE:${nextCompact}`;
+  }
+
+  const nowStamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const scopeLabel = `公開範囲: ${ev.scope}${ev.targetTeam ? `（${ev.targetTeam}）` : ""}`;
+  const description = [ev.note, scopeLabel, "YUPEI MOBILE（雄飛祭実行委員会）"].filter(Boolean).join("\n");
+
+  const icsContent = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//YUPEI MOBILE//Schedule//JP",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:yupei-${ev.id}-${dateCompact}@yupei-mobile`,
+    `DTSTAMP:${nowStamp}`,
+    dtStartLine,
+    dtEndLine,
+    `SUMMARY:${escapeIcs(ev.title || "雄飛祭 予定")}`,
+    ev.location ? `LOCATION:${escapeIcs(ev.location)}` : "",
+    `DESCRIPTION:${escapeIcs(description)}`,
+    "END:VEVENT",
+    "END:VCALENDAR"
+  ].filter(Boolean).join("\r\n");
+
+  const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${(ev.title || "event").replace(/[\\/:*?"<>|]/g, "_")}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 function mapEventRow(row) {
@@ -228,9 +336,10 @@ function mapKeyRow(row) {
 }
 
 function mapCartRow(row) {
+  const rawCat = row.category ? normalizeCartCategoryName(row.category) : "";
   const resolvedCategory =
-    row.category && row.category !== "その他"
-      ? row.category
+    rawCat && rawCat !== "その他"
+      ? rawCat
       : inferCartCategory(row.name || "");
   return {
     id: row.id,
@@ -316,13 +425,16 @@ export default function App() {
   // 台車管理 state
   const [cartCategories, setCartCategories] = useState(() =>
     Array.isArray(saved?.cartCategories) && saved.cartCategories.length > 0
-      ? saved.cartCategories
+      ? Array.from(new Set(saved.cartCategories.map(normalizeCartCategoryName)))
       : initialCartCategories
   );
   const [activeCartTab, setActiveCartTab] = useState(null);
   const [carts, setCarts] = useState(() =>
     Array.isArray(saved?.carts)
-      ? saved.carts.map(c => ({ ...c, category: c.category || inferCartCategory(c.name) }))
+      ? saved.carts.map(c => ({
+          ...c,
+          category: normalizeCartCategoryName(c.category || inferCartCategory(c.name))
+        }))
       : initialCarts
   );
   const [showCartLentModal, setShowCartLentModal] = useState(false);
@@ -418,8 +530,10 @@ export default function App() {
         if (cartRows.length > 0) {
           const mapped = cartRows.map(mapCartRow);
           setCarts(mapped);
-          const extraCats = mapped.map(c => c.category).filter(Boolean);
-          setCartCategories(prev => Array.from(new Set([...prev, ...extraCats])));
+          const extraCats = mapped.map(c => normalizeCartCategoryName(c.category)).filter(Boolean);
+          setCartCategories(prev =>
+            Array.from(new Set([...prev.map(normalizeCartCategoryName), ...extraCats]))
+          );
         } else {
           await supabase.from("carts").upsert(carts);
         }
@@ -454,14 +568,18 @@ export default function App() {
     }
   }, [docs, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
 
+  // タブ一覧（"ALL"を除外し、必ずすべての種類タブの後に「すべて表示」が来るように保証）
   const allCartTabs = useMemo(() => {
-    const fromCarts = carts.map(c => c.category || inferCartCategory(c.name));
-    return Array.from(new Set([...cartCategories, ...fromCarts]));
+    const base = cartCategories.map(normalizeCartCategoryName).filter(t => t && t !== "ALL");
+    const fromCarts = carts
+      .map(c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)))
+      .filter(t => t && t !== "ALL");
+    return Array.from(new Set([...base, ...fromCarts]));
   }, [cartCategories, carts]);
 
   const filteredCarts = useMemo(() => {
     return carts.filter(c => {
-      const cat = c.category || inferCartCategory(c.name);
+      const cat = normalizeCartCategoryName(c.category || inferCartCategory(c.name));
       const matchesTab = activeCartTab === "ALL" ? true : cat === activeCartTab;
       const matchesSearch = c.name.toLowerCase().includes(cartSearch.toLowerCase());
       return matchesTab && matchesSearch;
@@ -793,10 +911,46 @@ export default function App() {
     }
   }
 
+  // タブ名の編集
+  async function renameCartTab(oldTabName) {
+    if (!oldTabName || oldTabName === "ALL") return;
+    const input = window.prompt("新しいタブ名を入力してください。", oldTabName);
+    const trimmed = input?.trim();
+    if (!trimmed || trimmed === oldTabName) return;
+    if (trimmed === "ALL" || trimmed === "すべて表示") {
+      alert("その名前はタブ名に使用できません。");
+      return;
+    }
+    if (allCartTabs.includes(trimmed)) {
+      alert("同じ名前のタブがすでに存在します。");
+      return;
+    }
+
+    setCartCategories(prev =>
+      Array.from(new Set(prev.map(t => (normalizeCartCategoryName(t) === oldTabName ? trimmed : t))))
+    );
+
+    const affectedCarts = carts.filter(
+      c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) === oldTabName
+    );
+    const updatedCarts = carts.map(c => {
+      const currentCat = normalizeCartCategoryName(c.category || inferCartCategory(c.name));
+      return currentCat === oldTabName ? { ...c, category: trimmed } : c;
+    });
+    setCarts(updatedCarts);
+    setActiveCartTab(trimmed);
+
+    if (supabase && affectedCarts.length > 0) {
+      await supabase
+        .from("carts")
+        .upsert(affectedCarts.map(c => ({ ...c, category: trimmed })));
+    }
+  }
+
   function openCartDetailModal(cartObj) {
     setSelectedCartDetail(cartObj);
     setCartEditForm({
-      category: cartObj.category || inferCartCategory(cartObj.name),
+      category: normalizeCartCategoryName(cartObj.category || inferCartCategory(cartObj.name)),
       name: cartObj.name || "",
       location: cartObj.location || ""
     });
@@ -811,7 +965,7 @@ export default function App() {
   async function saveCartInfo() {
     if (!selectedCartDetail || !cartEditForm.name.trim()) return;
     const trimmedName = cartEditForm.name.trim();
-    const resolvedCat = cartEditForm.category || "雄飛台車";
+    const resolvedCat = normalizeCartCategoryName(cartEditForm.category || "雄飛台車");
     const trimmedLocation = cartEditForm.location.trim() || defaultLocationForCategory(resolvedCat);
     const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
 
@@ -1016,41 +1170,86 @@ export default function App() {
             <div className="empty">この日の予定はまだ登録されていません。</div>
           ) : (
             selectedDateEvents.map(ev => (
-              <div className="file-row" key={ev.id} style={{alignItems: "flex-start"}}>
-                <div className="file-icon"><CalendarDays/></div>
-                <div className="file-info">
-                  <strong>{ev.title}</strong>
-                  <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "3px"}}>
-                    <Clock size={13}/>
-                    {ev.startTime ? `${ev.startTime}${ev.endTime ? ` 〜 ${ev.endTime}` : ""}` : "終日 / 時間未定"}
-                  </small>
-                  {ev.location && (
-                    <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "2px"}}>
-                      <MapPin size={13}/> {ev.location}
+              <div className="file-row" key={ev.id} style={{flexDirection: "column", alignItems: "stretch", gap: "10px"}}>
+                <div style={{display: "flex", alignItems: "flex-start", gap: "12px"}}>
+                  <div className="file-icon"><CalendarDays/></div>
+                  <div className="file-info">
+                    <strong>{ev.title}</strong>
+                    <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "3px"}}>
+                      <Clock size={13}/>
+                      {ev.startTime ? `${ev.startTime}${ev.endTime ? ` 〜 ${ev.endTime}` : ""}` : "終日 / 時間未定"}
                     </small>
-                  )}
-                  <small style={{marginTop: "3px"}}>
-                    公開範囲: {ev.scope}{ev.targetTeam ? `（${ev.targetTeam}）` : ""}
-                  </small>
-                  {ev.note && <small className="file-note">{ev.note}</small>}
+                    {ev.location && (
+                      <small style={{display: "flex", alignItems: "center", gap: "4px", marginTop: "2px"}}>
+                        <MapPin size={13}/> {ev.location}
+                      </small>
+                    )}
+                    <small style={{marginTop: "3px"}}>
+                      公開範囲: {ev.scope}{ev.targetTeam ? `（${ev.targetTeam}）` : ""}
+                    </small>
+                    {ev.note && <small className="file-note">{ev.note}</small>}
+                  </div>
+                  <div style={{display: "flex", gap: "6px"}}>
+                    <button
+                      type="button"
+                      className="secondary small"
+                      aria-label="予定を編集"
+                      style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+                      onClick={()=>openEditEventModal(ev)}
+                    >
+                      <Pencil size={13}/> 編集
+                    </button>
+                    <button
+                      type="button"
+                      className="danger-outline small"
+                      aria-label="予定を削除"
+                      onClick={()=>deleteEvent(ev.id)}
+                    >
+                      <Trash2 size={15}/>
+                    </button>
+                  </div>
                 </div>
-                <div style={{display: "flex", gap: "6px"}}>
+
+                {/* 外部カレンダー連携ボタン（Googleカレンダー / iPhone純正カレンダー） */}
+                <div style={{display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "8px", borderTop: "1px solid #eef2f6"}}>
+                  <a
+                    href={buildGoogleCalendarUrl(ev)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      border: "1px solid #dfe5ec",
+                      background: "#f8fafc",
+                      color: "#1e293b",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    <CalendarPlus size={13}/> Googleカレンダーに追加
+                  </a>
                   <button
                     type="button"
-                    className="secondary small"
-                    aria-label="予定を編集"
-                    style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
-                    onClick={()=>openEditEventModal(ev)}
+                    onClick={()=>downloadEventIcs(ev)}
+                    style={{
+                      border: "1px solid #dfe5ec",
+                      background: "#f8fafc",
+                      color: "#1e293b",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      fontSize: "11px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
                   >
-                    <Pencil size={13}/> 編集
-                  </button>
-                  <button
-                    type="button"
-                    className="danger-outline small"
-                    aria-label="予定を削除"
-                    onClick={()=>deleteEvent(ev.id)}
-                  >
-                    <Trash2 size={15}/>
+                    <CalendarPlus size={13}/> iPhoneカレンダーに追加 (.ics)
                   </button>
                 </div>
               </div>
@@ -1367,14 +1566,26 @@ export default function App() {
             <h2>台車一覧</h2>
             <small>{activeCartTab ? `${activeCartTab === "ALL" ? "すべて" : activeCartTab}（${filteredCarts.length}台）` : "タブを押して開く"}</small>
           </div>
-          <button className="primary small" onClick={openCartAddModal}><Plus size={16}/> 追加</button>
+          <div style={{display: "flex", gap: "6px"}}>
+            {activeCartTab && activeCartTab !== "ALL" && (
+              <button
+                type="button"
+                className="secondary small"
+                style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+                onClick={()=>renameCartTab(activeCartTab)}
+              >
+                <Pencil size={13}/> タブ名を編集
+              </button>
+            )}
+            <button className="primary small" onClick={openCartAddModal}><Plus size={16}/> 追加</button>
+          </div>
         </div>
 
-        {/* 種類別タブ（押すと開く／もう一度押すと閉じる） */}
+        {/* 種類別タブ（何個追加しても必ず「すべて表示」が最後に来る） */}
         <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px"}}>
           {allCartTabs.map(tab => {
-            const count = carts.filter(c => (c.category || inferCartCategory(c.name)) === tab).length;
-            const lentCount = carts.filter(c => (c.category || inferCartCategory(c.name)) === tab && c.status === "貸出中").length;
+            const count = carts.filter(c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) === tab).length;
+            const lentCount = carts.filter(c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) === tab && c.status === "貸出中").length;
             const isOpen = activeCartTab === tab;
             return (
               <button
@@ -1445,7 +1656,7 @@ export default function App() {
                 <div className="file-icon"><Truck/></div>
                 <div className="file-info">
                   <strong>{c.name}</strong>
-                  <small>種類: {c.category || inferCartCategory(c.name)} ・ 状態: <span style={{color: c.status === "保管中" ? "#2b6843" : "#a34343", fontWeight: 700}}>{c.status}</span></small>
+                  <small>種類: {normalizeCartCategoryName(c.category || inferCartCategory(c.name))} ・ 状態: <span style={{color: c.status === "保管中" ? "#2b6843" : "#a34343", fontWeight: 700}}>{c.status}</span></small>
                   <small>{c.status === "貸出中" ? `使用者: ${c.holder}` : `保管場所: ${c.location}`}</small>
                   <small style={{color: "#666", marginTop: "2px"}}>
                     {c.history && c.history.length > 0
@@ -1480,7 +1691,7 @@ export default function App() {
                       <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
                         if (!window.confirm(`「${c.name}」の台車を返却しますか？`)) return;
                         const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                        const cat = c.category || inferCartCategory(c.name);
+                        const cat = normalizeCartCategoryName(c.category || inferCartCategory(c.name));
                         const defaultReturnLocation = c.location || defaultLocationForCategory(cat);
                         await updateCartRecord({
                           ...c,
@@ -1807,7 +2018,7 @@ export default function App() {
                 <strong>{c.name}</strong>
                 <span style={{fontSize: "12px", color: "#a34343", fontWeight: 700}}>貸出中</span>
               </div>
-              <small>種類: {c.category || inferCartCategory(c.name)} ・ 使用者: <strong>{c.holder}</strong></small>
+              <small>種類: {normalizeCartCategoryName(c.category || inferCartCategory(c.name))} ・ 使用者: <strong>{c.holder}</strong></small>
               {c.history && c.history.length > 0 && (
                 <small style={{color: "#555"}}>直近の操作: {c.history[0].time} {c.history[0].action}</small>
               )}
@@ -1827,7 +2038,7 @@ export default function App() {
 
       {!isEditingCart ? (
         <div className="notice-card" style={{margin: "12px 0"}}>
-          <p style={{margin: 0}}>種類（タブ）: <strong>{selectedCartDetail.category || inferCartCategory(selectedCartDetail.name)}</strong></p>
+          <p style={{margin: 0}}>種類（タブ）: <strong>{normalizeCartCategoryName(selectedCartDetail.category || inferCartCategory(selectedCartDetail.name))}</strong></p>
           <p style={{margin: "4px 0 0"}}>状態: <strong style={{color: selectedCartDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedCartDetail.status}</strong></p>
           <p style={{margin: "4px 0 0"}}>使用者 / 保管場所: <strong>{selectedCartDetail.status === "貸出中" ? selectedCartDetail.holder : selectedCartDetail.location}</strong></p>
           <div style={{marginTop: "10px"}}>
@@ -1837,7 +2048,7 @@ export default function App() {
               style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
               onClick={()=>{
                 setCartEditForm({
-                  category: selectedCartDetail.category || inferCartCategory(selectedCartDetail.name),
+                  category: normalizeCartCategoryName(selectedCartDetail.category || inferCartCategory(selectedCartDetail.name)),
                   name: selectedCartDetail.name || "",
                   location: selectedCartDetail.location || ""
                 });
@@ -1924,7 +2135,6 @@ export default function App() {
         <button className="icon-button" onClick={()=>setShowCartAddModal(false)}><X/></button>
       </div>
 
-      {/* 追加対象（台車 / タブ）の切り替え */}
       <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px"}}>
         <button
           type="button"
@@ -1978,7 +2188,7 @@ export default function App() {
             <input
               value={newCartName}
               onChange={e=>setNewCartName(e.target.value)}
-              placeholder="例：学友会台車 5 / ダスキン台車 23"
+              placeholder="例：学友台車 5 / ダスキン台車 23"
             />
           </label>
           <label className="field-label">保管場所
@@ -1993,7 +2203,7 @@ export default function App() {
             disabled={!newCartName.trim()}
             onClick={async ()=>{
               const name = newCartName.trim();
-              const cat = newCartCategory || "雄飛台車";
+              const cat = normalizeCartCategoryName(newCartCategory || "雄飛台車");
               const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
               const newCart = {
                 id: Date.now(),
