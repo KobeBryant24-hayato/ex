@@ -4,7 +4,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, MapPin, Clock
+  CalendarCog, ChevronRight, MapPin, Clock, Pencil
 } from "lucide-react";
 
 const initialDepartments = [
@@ -73,6 +73,7 @@ export default function App() {
     }
   ]);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState(null);
   const [eventForm, setEventForm] = useState({
     title: "",
     date: todayKey,
@@ -208,6 +209,7 @@ export default function App() {
   }, [events, todayKey]);
 
   function openNewEventModal(dateStr = selectedDate) {
+    setEditingEventId(null);
     setEventForm({
       title: "",
       date: dateStr,
@@ -221,13 +223,27 @@ export default function App() {
     setShowEventModal(true);
   }
 
+  function openEditEventModal(ev) {
+    setEditingEventId(ev.id);
+    setEventForm({
+      title: ev.title || "",
+      date: ev.date || selectedDate,
+      startTime: ev.startTime || "",
+      endTime: ev.endTime || "",
+      location: ev.location || "",
+      scope: ev.scope || "全体公開",
+      targetTeam: ev.targetTeam || "",
+      note: ev.note || ""
+    });
+    setShowEventModal(true);
+  }
+
   function saveEvent() {
     if (!eventForm.title.trim() || !eventForm.date) return;
     const availableTeams = eventForm.scope !== "全体公開" ? (teamsByDepartment[eventForm.scope] || []) : [];
     const resolvedTeam = availableTeams.length > 0 ? eventForm.targetTeam : "";
 
-    const newEv = {
-      id: Date.now(),
+    const payload = {
       title: eventForm.title.trim(),
       date: eventForm.date,
       startTime: eventForm.startTime,
@@ -238,12 +254,18 @@ export default function App() {
       note: eventForm.note.trim()
     };
 
-    setEvents(prev => [...prev, newEv]);
+    if (editingEventId !== null) {
+      setEvents(prev => prev.map(ev => ev.id === editingEventId ? { ...ev, ...payload } : ev));
+    } else {
+      setEvents(prev => [...prev, { id: Date.now(), ...payload }]);
+    }
+
     setSelectedDate(eventForm.date);
     const [y, m] = eventForm.date.split("-").map(Number);
     if (y && m) {
       setCurrentMonth(new Date(y, m - 1, 1));
     }
+    setEditingEventId(null);
     setShowEventModal(false);
   }
 
@@ -488,14 +510,25 @@ export default function App() {
                   </small>
                   {ev.note && <small className="file-note">{ev.note}</small>}
                 </div>
-                <button
-                  type="button"
-                  className="danger-outline small"
-                  aria-label="予定を削除"
-                  onClick={()=>deleteEvent(ev.id)}
-                >
-                  <Trash2 size={15}/>
-                </button>
+                <div style={{display: "flex", gap: "6px"}}>
+                  <button
+                    type="button"
+                    className="secondary small"
+                    aria-label="予定を編集"
+                    style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+                    onClick={()=>openEditEventModal(ev)}
+                  >
+                    <Pencil size={13}/> 編集
+                  </button>
+                  <button
+                    type="button"
+                    className="danger-outline small"
+                    aria-label="予定を削除"
+                    onClick={()=>deleteEvent(ev.id)}
+                  >
+                    <Trash2 size={15}/>
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -759,8 +792,11 @@ export default function App() {
       </section>}
     </main>
 
-    {showEventModal && <div className="modal-backdrop" onClick={()=>setShowEventModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-      <div className="modal-head"><h2>予定を追加</h2><button className="icon-button" onClick={()=>setShowEventModal(false)}><X/></button></div>
+    {showEventModal && <div className="modal-backdrop" onClick={()=>{setShowEventModal(false);setEditingEventId(null);}}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>{editingEventId !== null ? "予定を編集" : "予定を追加"}</h2>
+        <button className="icon-button" onClick={()=>{setShowEventModal(false);setEditingEventId(null);}}><X/></button>
+      </div>
       <label className="field-label">予定名
         <input
           value={eventForm.title}
@@ -826,7 +862,7 @@ export default function App() {
         />
       </label>
       <button className="primary full" disabled={!eventForm.title.trim() || !eventForm.date} onClick={saveEvent}>
-        登録
+        {editingEventId !== null ? "更新を保存" : "登録"}
       </button>
     </div></div>}
 
