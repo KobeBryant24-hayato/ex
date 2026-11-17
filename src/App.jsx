@@ -4,7 +4,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, MapPin, Clock, Pencil
+  CalendarCog, ChevronRight, MapPin, Clock, Pencil, Eye
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
@@ -89,14 +89,139 @@ function formatDateKey(dateObj) {
   return `${y}-${m}-${d}`;
 }
 
+function getExtension(name = "") {
+  return name.split(".").pop()?.toLowerCase() || "";
+}
+
 function fileIcon(name) {
-  const ext = name.split(".").pop()?.toLowerCase();
+  const ext = getExtension(name);
   if (["jpg","jpeg","png","gif","webp"].includes(ext)) return <Image />;
   if (["xls","xlsx","csv"].includes(ext)) return <FileSpreadsheet />;
   if (["ppt","pptx"].includes(ext)) return <Presentation />;
   if (["mp3","wav","m4a"].includes(ext)) return <Music />;
   if (["mp4","mov"].includes(ext)) return <Video />;
   return <FileText />;
+}
+
+function DocPreviewBox({ doc }) {
+  const [textPreview, setTextPreview] = useState("");
+  const [objectUrl, setObjectUrl] = useState("");
+
+  const ext = getExtension(doc?.name);
+  const isImage = ["jpg", "jpeg", "png", "gif", "webp"].includes(ext) || doc?.file?.type?.startsWith("image/");
+  const isPdf = ext === "pdf" || doc?.file?.type === "application/pdf";
+  const isText = ["txt", "csv", "md", "json", "log"].includes(ext) || doc?.file?.type?.startsWith("text/");
+
+  useEffect(() => {
+    setTextPreview("");
+    if (!doc?.file) {
+      setObjectUrl("");
+      return;
+    }
+
+    const url = URL.createObjectURL(doc.file);
+    setObjectUrl(url);
+
+    if (isText) {
+      doc.file.text().then(txt => {
+        setTextPreview(txt.slice(0, 4000));
+      }).catch(() => {
+        setTextPreview("");
+      });
+    }
+
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [doc, isText]);
+
+  if (!doc) return null;
+
+  if (!doc.file) {
+    return (
+      <div style={{
+        background: "#f1f5f9",
+        border: "1px solid #e2e8f0",
+        borderRadius: "10px",
+        padding: "12px",
+        marginTop: "10px",
+        fontSize: "12px",
+        color: "#475569"
+      }}>
+        この資料のファイル実体はブラウザメモリ上にありません（サンプル資料または再読み込み前のデータ）。新しくアップロードした資料は、再読み込みするまでそのままブラウザ上でプレビューできます。
+      </div>
+    );
+  }
+
+  if (isImage && objectUrl) {
+    return (
+      <div style={{
+        marginTop: "12px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        padding: "10px",
+        background: "#f8fafc",
+        textAlign: "center"
+      }}>
+        <img
+          src={objectUrl}
+          alt={doc.name}
+          style={{ maxWidth: "100%", maxHeight: "320px", borderRadius: "8px", objectFit: "contain" }}
+        />
+      </div>
+    );
+  }
+
+  if (isPdf && objectUrl) {
+    return (
+      <div style={{
+        marginTop: "12px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        overflow: "hidden",
+        background: "#f8fafc"
+      }}>
+        <iframe
+          src={objectUrl}
+          title={doc.name}
+          style={{ width: "100%", height: "320px", border: "none", display: "block" }}
+        />
+      </div>
+    );
+  }
+
+  if (isText) {
+    return (
+      <pre style={{
+        marginTop: "12px",
+        border: "1px solid #e2e8f0",
+        borderRadius: "12px",
+        padding: "12px",
+        background: "#f8fafc",
+        fontSize: "12px",
+        maxHeight: "260px",
+        overflow: "auto",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word"
+      }}>
+        {textPreview || "読み込み中..."}
+      </pre>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "#f1f5f9",
+      border: "1px solid #e2e8f0",
+      borderRadius: "10px",
+      padding: "12px",
+      marginTop: "10px",
+      fontSize: "12px",
+      color: "#475569"
+    }}>
+      「{ext || "この"}」形式はブラウザ内の簡易プレビュー非対応です。必要に応じて右の「ダウンロード」から開いてください。
+    </div>
+  );
 }
 
 export default function App() {
@@ -113,6 +238,7 @@ export default function App() {
   );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [previewDoc, setPreviewDoc] = useState(null);
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -197,7 +323,6 @@ export default function App() {
       : initialPermissions
   );
 
-  // 入力・変更内容をブラウザのlocalStorageに自動保存
   useEffect(() => {
     try {
       const serializableDocs = docs.map(({ file: _file, ...rest }) => rest);
@@ -218,8 +343,14 @@ export default function App() {
     }
   }, [docs, events, keys, departments, teamsByDepartment, members, permissions]);
 
+  // 公開範囲（局）と現在選択中のタブに一致する資料を表示
   const visibleDocs = useMemo(() => docs
-    .filter(d => d.dept === section)
+    .filter(d => {
+      if (section === "委員会活動全体") {
+        return d.dept === "委員会活動全体" || d.scope === "全体公開";
+      }
+      return d.dept === section || d.scope === section;
+    })
     .filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b) => new Date(b.updated) - new Date(a.updated)), [docs, section, search]);
 
@@ -330,16 +461,27 @@ export default function App() {
     setEvents(prev => prev.filter(ev => ev.id !== id));
   }
 
+  function openUploadModal() {
+    const defaultScope = section === "委員会活動全体" ? "全体公開" : section;
+    setScope(defaultScope);
+    setTargetTeam("");
+    setFile(null);
+    setNote("");
+    setShowUpload(true);
+  }
+
   function upload() {
     if (!file) return;
     const now = new Date().toISOString();
     const availableTeams = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
     const resolvedTeam = availableTeams.length > 0 ? targetTeam : "";
+    const resolvedDept = scope === "全体公開" ? "委員会活動全体" : scope;
+
     setDocs(prev => [{
       id: Date.now(),
       name: file.name,
       file,
-      dept: section,
+      dept: resolvedDept,
       scope,
       targetTeam: resolvedTeam,
       note,
@@ -347,6 +489,9 @@ export default function App() {
       owner: "ログインユーザー",
       comments: []
     }, ...prev]);
+
+    setSection(resolvedDept);
+    setSearch("");
     setFile(null);
     setNote("");
     setScope("全体公開");
@@ -362,11 +507,13 @@ export default function App() {
 
   function removeDoc(id) {
     if (!window.confirm("この資料を完全に削除しますか？この操作は取り消せません。")) return;
-    setDocs(prev => prev.filter(d => d.id !== id)); setSelected(null);
+    setDocs(prev => prev.filter(d => d.id !== id));
+    if (selected?.id === id) setSelected(null);
+    if (previewDoc?.id === id) setPreviewDoc(null);
   }
 
   function downloadDoc(doc) {
-    if (!doc.file) { alert("再読み込み後の資料またはサンプル資料のため、この画面単体ではダウンロードできません。Supabase連携後に利用可能になります。"); return; }
+    if (!doc.file) { alert("サンプル資料または再読み込み前の資料のため、この画面単体ではダウンロードできません。Supabase連携後に利用可能になります。"); return; }
     const url = URL.createObjectURL(doc.file);
     const a = document.createElement("a"); a.href = url; a.download = doc.name; a.click();
     URL.revokeObjectURL(url);
@@ -387,7 +534,7 @@ export default function App() {
       <button
         type="button"
         className="brand-home-button"
-        onClick={() => { setPage("home"); setSelected(null); setSelectedKeyDetail(null); }}
+        onClick={() => { setPage("home"); setSelected(null); setPreviewDoc(null); setSelectedKeyDetail(null); }}
         aria-label="ホームへ戻る"
       >
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -600,18 +747,56 @@ export default function App() {
           </button>
           {departments.map(d => <button key={d} className={`department-tile ${section===d?"selected":""}`} onClick={()=>{setSection(d);setSearch("");}}>{d}</button>)}
         </div>
-        <div className="list-heading"><div><h2>{section}</h2><small>{visibleDocs.length}件の資料</small></div><button className="primary small" onClick={()=>{setScope("全体公開");setTargetTeam("");setShowUpload(true);}}><Plus size={16}/> アップロード</button></div>
+        <div className="list-heading"><div><h2>{section}</h2><small>{visibleDocs.length}件の資料</small></div><button className="primary small" onClick={openUploadModal}><Plus size={16}/> アップロード</button></div>
         <div className="searchbox"><Search size={18}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ファイル名で検索"/></div>
         <div className="file-list">
-          {visibleDocs.length === 0 ? <div className="empty">資料はまだ登録されていません。</div> : visibleDocs.map(doc=><button className="file-row" key={doc.id} onClick={()=>setSelected(doc)}>
-            <div className="file-icon">{fileIcon(doc.name)}</div>
-            <div className="file-info">
-              <strong>{doc.name}</strong>
-              <small>公開範囲: {doc.scope}{doc.targetTeam ? `（${doc.targetTeam}）` : ""} ・ {doc.owner} ・ 更新 {new Date(doc.updated).toLocaleDateString("ja-JP")}</small>
-              {doc.note && <small className="file-note">{doc.note}</small>}
+          {visibleDocs.length === 0 ? <div className="empty">資料はまだ登録されていません。</div> : visibleDocs.map(doc=>(
+            <div className="file-row" key={doc.id} style={{alignItems: "center", gap: "10px"}}>
+              <button
+                type="button"
+                onClick={()=>setSelected(doc)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  flex: 1,
+                  minWidth: 0,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  textAlign: "left",
+                  cursor: "pointer"
+                }}
+              >
+                <div className="file-icon">{fileIcon(doc.name)}</div>
+                <div className="file-info">
+                  <strong>{doc.name}</strong>
+                  <small>公開範囲: {doc.scope}{doc.targetTeam ? `（${doc.targetTeam}）` : ""} ・ {doc.owner} ・ 更新 {new Date(doc.updated).toLocaleDateString("ja-JP")}</small>
+                  {doc.note && <small className="file-note">{doc.note}</small>}
+                </div>
+              </button>
+              <button
+                type="button"
+                className="secondary small"
+                style={{
+                  border: "1px solid #dfe5ec",
+                  background: "#fff",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  flexShrink: 0
+                }}
+                onClick={e=>{e.stopPropagation(); setPreviewDoc(doc);}}
+              >
+                <Eye size={14}/> プレビュー
+              </button>
             </div>
-            <span className="file-arrow">›</span>
-          </button>)}
+          ))}
         </div>
       </section>}
 
@@ -962,7 +1147,26 @@ export default function App() {
       )}
       <label className="field-label">説明・備考（任意）<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="資料についての説明"/></label>
       <button className="primary full" disabled={!file} onClick={upload}>登録</button>
-      <p className="fine-print">※資料のメタデータやコメントはブラウザに保存されます。ファイル実体の共有や閲覧権限制御はSupabase連携後に有効になります。</p>
+      <p className="fine-print">※選択した公開範囲（局・班）に従って登録され、該当の局タブや全体公開に表示されます。</p>
+    </div></div>}
+
+    {previewDoc && <div className="modal-backdrop" onClick={()=>setPreviewDoc(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>プレビュー</h2>
+        <button className="icon-button" onClick={()=>setPreviewDoc(null)}><X/></button>
+      </div>
+      <div className="detail-file">
+        <div className="file-icon large">{fileIcon(previewDoc.name)}</div>
+        <div>
+          <strong>{previewDoc.name}</strong>
+          <small>公開範囲: {previewDoc.scope}{previewDoc.targetTeam ? `（${previewDoc.targetTeam}）` : ""}</small>
+        </div>
+      </div>
+      <DocPreviewBox doc={previewDoc} />
+      <div className="detail-actions" style={{marginTop: "14px"}}>
+        <button className="primary" onClick={()=>downloadDoc(previewDoc)}><Download size={17}/> ダウンロード</button>
+        <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}} onClick={()=>{setSelected(previewDoc); setPreviewDoc(null);}}>詳細・コメント</button>
+      </div>
     </div></div>}
 
     {selected && <div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -974,6 +1178,7 @@ export default function App() {
           <small>{selected.dept} ・ {selected.scope}{selected.targetTeam ? `（${selected.targetTeam}）` : ""}</small>
         </div>
       </div>
+      <DocPreviewBox doc={selected} />
       {selected.note && <p className="detail-note">{selected.note}</p>}
       <div className="detail-actions"><button className="primary" onClick={()=>downloadDoc(selected)}><Download size={17}/> ダウンロード</button><button className="danger-outline" onClick={()=>removeDoc(selected.id)}><Trash2 size={17}/> 削除</button></div>
       <h3 className="comments-title">コメント ({selected.comments.length})</h3>
