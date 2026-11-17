@@ -250,6 +250,8 @@ export default function App() {
   const [keys, setKeys] = useState(() => Array.isArray(saved?.keys) ? saved.keys : initialKeys);
   const [showLentModal, setShowLentModal] = useState(false);
   const [selectedKeyDetail, setSelectedKeyDetail] = useState(null);
+  const [isEditingKey, setIsEditingKey] = useState(false);
+  const [keyEditForm, setKeyEditForm] = useState({ name: "", location: "" });
   const [keySearch, setKeySearch] = useState("");
   const [showKeyAddModal, setShowKeyAddModal] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
@@ -626,6 +628,40 @@ export default function App() {
     }
   }
 
+  function openKeyDetailModal(keyObj) {
+    setSelectedKeyDetail(keyObj);
+    setKeyEditForm({
+      name: keyObj.name || "",
+      location: keyObj.location || ""
+    });
+    setIsEditingKey(false);
+  }
+
+  function closeKeyDetailModal() {
+    setSelectedKeyDetail(null);
+    setIsEditingKey(false);
+  }
+
+  async function saveKeyInfo() {
+    if (!selectedKeyDetail || !keyEditForm.name.trim()) return;
+    const trimmedName = keyEditForm.name.trim();
+    const trimmedLocation = keyEditForm.location.trim() || "雄飛室・鍵ボックス";
+    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+
+    const updatedKey = {
+      ...selectedKeyDetail,
+      name: trimmedName,
+      location: selectedKeyDetail.status === "保管中" ? trimmedLocation : selectedKeyDetail.location,
+      history: [
+        { time: nowStr, action: `情報編集（${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
+        ...(selectedKeyDetail.history || [])
+      ]
+    };
+
+    await updateKeyRecord(updatedKey);
+    setIsEditingKey(false);
+  }
+
   const menuItems = [
     [CalendarDays, "カレンダー", "calendar"],
     [KeyRound, "鍵管理", "keys"],
@@ -641,7 +677,7 @@ export default function App() {
       <button
         type="button"
         className="brand-home-button"
-        onClick={() => { setPage("home"); setSelected(null); setSelectedKeyDetail(null); }}
+        onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); }}
         aria-label="ホームへ戻る"
       >
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -1073,7 +1109,7 @@ export default function App() {
         <div className="searchbox"><Search size={18}/><input value={keySearch} onChange={e=>setKeySearch(e.target.value)} placeholder="鍵の名前で検索（例：フリスペ、楓、暁月）"/></div>
 
         <div className="file-list">
-          {keys.filter(k => k.name.toLowerCase().includes(keySearch.toLowerCase())).map(k => <div className="file-row" key={k.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>setSelectedKeyDetail(k)}>
+          {keys.filter(k => k.name.toLowerCase().includes(keySearch.toLowerCase())).map(k => <div className="file-row" key={k.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>openKeyDetailModal(k)}>
             <div className="file-icon"><KeyRound/></div>
             <div className="file-info">
               <strong>{k.name}</strong>
@@ -1300,15 +1336,77 @@ export default function App() {
       <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setShowLentModal(false)}>閉じる</button>
     </div></div>}
 
-    {selectedKeyDetail && <div className="modal-backdrop" onClick={()=>setSelectedKeyDetail(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+    {selectedKeyDetail && <div className="modal-backdrop" onClick={closeKeyDetailModal}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
         <h2>{selectedKeyDetail.name} の詳細</h2>
-        <button className="icon-button" onClick={()=>setSelectedKeyDetail(null)}><X/></button>
+        <button className="icon-button" onClick={closeKeyDetailModal}><X/></button>
       </div>
-      <div className="notice-card" style={{margin: "12px 0"}}>
-        <p style={{margin: 0}}>状態: <strong style={{color: selectedKeyDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedKeyDetail.status}</strong></p>
-        <p style={{margin: "4px 0 0"}}>所持者 / 保管場所: <strong>{selectedKeyDetail.status === "貸出中" ? selectedKeyDetail.holder : selectedKeyDetail.location}</strong></p>
-      </div>
+
+      {!isEditingKey ? (
+        <>
+          <div className="notice-card" style={{margin: "12px 0"}}>
+            <p style={{margin: 0}}>状態: <strong style={{color: selectedKeyDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedKeyDetail.status}</strong></p>
+            <p style={{margin: "4px 0 0"}}>所持者 / 保管場所: <strong>{selectedKeyDetail.status === "貸出中" ? selectedKeyDetail.holder : selectedKeyDetail.location}</strong></p>
+            <div style={{marginTop: "10px"}}>
+              <button
+                type="button"
+                className="secondary small"
+                style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+                onClick={()=>{
+                  setKeyEditForm({
+                    name: selectedKeyDetail.name || "",
+                    location: selectedKeyDetail.location || ""
+                  });
+                  setIsEditingKey(true);
+                }}
+              >
+                <Pencil size={13}/> 名前・保管場所を編集
+              </button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="notice-card" style={{margin: "12px 0"}}>
+          <label className="field-label" style={{marginTop: 0}}>鍵の名前
+            <input
+              value={keyEditForm.name}
+              onChange={e=>setKeyEditForm(v=>({...v, name: e.target.value}))}
+              placeholder="例：フリスペ 101"
+            />
+          </label>
+          <label className="field-label">保管場所
+            <input
+              value={keyEditForm.location}
+              onChange={e=>setKeyEditForm(v=>({...v, location: e.target.value}))}
+              placeholder="例：雄飛室・鍵ボックス"
+            />
+          </label>
+          {selectedKeyDetail.status === "貸出中" && (
+            <small style={{display: "block", color: "#64748b", marginTop: "6px"}}>
+              ※現在貸出中のため、返却時の保管場所として反映されます。
+            </small>
+          )}
+          <div style={{display: "flex", gap: "8px", marginTop: "12px"}}>
+            <button
+              type="button"
+              className="primary small"
+              disabled={!keyEditForm.name.trim()}
+              onClick={saveKeyInfo}
+            >
+              保存
+            </button>
+            <button
+              type="button"
+              className="secondary small"
+              style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer"}}
+              onClick={()=>setIsEditingKey(false)}
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>
+      )}
+
       <h3 style={{fontSize: "14px", margin: "16px 0 8px"}}>操作履歴（日時・アクション）</h3>
       <div className="file-list" style={{maxHeight: "250px", overflowY: "auto"}}>
         {!selectedKeyDetail.history || selectedKeyDetail.history.length === 0 ? (
@@ -1325,7 +1423,7 @@ export default function App() {
           ))
         )}
       </div>
-      <button className="primary full" style={{marginTop: "16px"}} onClick={()=>setSelectedKeyDetail(null)}>閉じる</button>
+      <button className="primary full" style={{marginTop: "16px"}} onClick={closeKeyDetailModal}>閉じる</button>
     </div></div>}
 
     {showKeyAddModal && <div className="modal-backdrop" onClick={()=>setShowKeyAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
