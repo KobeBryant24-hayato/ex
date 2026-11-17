@@ -5,7 +5,8 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, ChevronDown, MapPin, Clock, Pencil, ExternalLink, CalendarPlus, Megaphone
+  CalendarCog, ChevronRight, ChevronDown, MapPin, Clock, Pencil, ExternalLink,
+  CalendarPlus, Megaphone, Grid3X3, List, CheckCircle2, Camera
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
@@ -30,7 +31,7 @@ const initialNotices = [
     id: 1,
     title: "資料共有・各種管理機能の運用開始について",
     author: "委員長",
-    body: "YUPEI MOBILEにてカレンダー・お知らせ・資料共有・台車管理・鍵管理の運用を開始しました。各局・班での連絡や備品管理にご活用ください。",
+    body: "YUPEI MOBILEにてカレンダー・お知らせ・資料共有・台車管理・鍵管理・落とし物管理の運用を開始しました。各局・班での連絡や備品管理にご活用ください。",
     targets: ["全体公開"],
     createdAt: "2026-11-18T00:30:00"
   }
@@ -155,8 +156,36 @@ function formatDateKey(dateObj) {
   return `${y}-${m}-${d}`;
 }
 
+function formatNowTimeInput() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function formatPostedDateTime(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  if (Number.isNaN(d.getTime())) return isoStr;
+  return d.toLocaleString("ja-JP", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function getExtension(name = "") {
   return name.split(".").pop()?.toLowerCase() || "";
+}
+
+function fileToDataUrl(fileObj) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(fileObj);
+  });
 }
 
 function fileIcon(name) {
@@ -292,6 +321,38 @@ function toNoticeRow(notice) {
   };
 }
 
+function mapLostItemRow(row) {
+  return {
+    id: row.id,
+    name: row.name || "",
+    foundLocation: row.found_location || "",
+    foundTime: row.found_time || "",
+    finder: row.finder || CURRENT_USER_NAME,
+    storageType: row.storage_type || "警備本部",
+    storageOther: row.storage_other || "",
+    comment: row.comment || "",
+    status: row.status || "保管中",
+    photos: Array.isArray(row.photos) ? row.photos : [],
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
+function toLostItemRow(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    found_location: item.foundLocation || "",
+    found_time: item.foundTime || "",
+    finder: item.finder || CURRENT_USER_NAME,
+    storage_type: item.storageType || "警備本部",
+    storage_other: item.storageOther || "",
+    comment: item.comment || "",
+    status: item.status || "保管中",
+    photos: Array.isArray(item.photos) ? item.photos : [],
+    created_at: item.createdAt
+  };
+}
+
 function mapEventRow(row) {
   return {
     id: row.id,
@@ -403,7 +464,7 @@ export default function App() {
 
   // お知らせ state
   const [notices, setNotices] = useState(() =>
-    Array.isArray(saved?.notices) && saved.notices.length > 0
+    Array.isArray(saved?.notices)
       ? saved.notices
       : initialNotices
   );
@@ -414,6 +475,29 @@ export default function App() {
     targets: ["全体公開"]
   });
   const [expandedNoticeDepts, setExpandedNoticeDepts] = useState({});
+
+  // 落とし物 state
+  const [lostItems, setLostItems] = useState(() =>
+    Array.isArray(saved?.lostItems) ? saved.lostItems : []
+  );
+  const [lostViewMode, setLostViewMode] = useState("list"); // "list" | "photos"
+  const [lostStatusFilter, setLostStatusFilter] = useState("保管中"); // "保管中" | "返却済" | "すべて"
+  const [selectedLostDetail, setSelectedLostDetail] = useState(null);
+  const [showLostFormModal, setShowLostFormModal] = useState(false);
+  const [editingLostItem, setEditingLostItem] = useState(null);
+  const [savingLostItem, setSavingLostItem] = useState(false);
+  const [lostForm, setLostForm] = useState({
+    name: "",
+    foundLocation: "",
+    foundTime: formatNowTimeInput(),
+    finder: CURRENT_USER_NAME,
+    storageType: "警備本部",
+    storageOther: "",
+    comment: "",
+    existingPhotos: [],
+    newFiles: [],
+    newPreviews: []
+  });
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -490,7 +574,7 @@ export default function App() {
   const [cartEditForm, setCartEditForm] = useState({ category: "雄飛台車", name: "", location: "" });
   const [cartSearch, setCartSearch] = useState("");
   const [showCartAddModal, setShowCartAddModal] = useState(false);
-  const [addModalMode, setAddModalMode] = useState("cart"); // "cart" | "tab"
+  const [addModalMode, setAddModalMode] = useState("cart");
   const [newCartCategory, setNewCartCategory] = useState("雄飛台車");
   const [newCartName, setNewCartName] = useState("");
   const [newCartLocation, setNewCartLocation] = useState("雄飛室");
@@ -540,13 +624,15 @@ export default function App() {
         { data: docRows, error: docErr },
         { data: keyRows, error: keyErr },
         { data: cartRows, error: cartErr },
-        { data: noticeRows, error: noticeErr }
+        { data: noticeRows, error: noticeErr },
+        { data: lostRows, error: lostErr }
       ] = await Promise.all([
         supabase.from("events").select("*").order("id", { ascending: true }),
         supabase.from("documents").select("*").order("updated", { ascending: false }),
         supabase.from("keys").select("*").order("id", { ascending: true }),
         supabase.from("carts").select("*").order("id", { ascending: true }),
-        supabase.from("notices").select("*").order("id", { ascending: false })
+        supabase.from("notices").select("*").order("id", { ascending: false }),
+        supabase.from("lost_items").select("*").order("id", { ascending: true })
       ]);
 
       if (!active) return;
@@ -595,6 +681,10 @@ export default function App() {
           await supabase.from("notices").upsert(notices.map(toNoticeRow));
         }
       }
+
+      if (!lostErr && Array.isArray(lostRows) && lostRows.length > 0) {
+        setLostItems(lostRows.map(mapLostItemRow));
+      }
     }
 
     syncFromSupabase();
@@ -611,6 +701,7 @@ export default function App() {
         JSON.stringify({
           docs: serializableDocs,
           notices,
+          lostItems,
           events,
           keys,
           carts,
@@ -622,15 +713,28 @@ export default function App() {
         })
       );
     } catch {
-      // 無視
+      // 容量制限等は無視
     }
-  }, [docs, notices, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
+  }, [docs, notices, lostItems, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
 
   const sortedNotices = useMemo(() => {
     return [...notices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [notices]);
 
   const latestNotice = sortedNotices[0] || null;
+
+  // 落とし物：ステータス絞り込み＆並び順
+  // リスト表示は新しい順（上から新しい）、写真表示は古いものから新しいものへ「下から上に上がる」並び順
+  const filteredLostItemsNewestFirst = useMemo(() => {
+    return lostItems
+      .filter(item => lostStatusFilter === "すべて" ? true : item.status === lostStatusFilter)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [lostItems, lostStatusFilter]);
+
+  const filteredLostItemsBottomUp = useMemo(() => {
+    // 配列の末尾（下）が一番古く、先頭（上）に向かって新しくなる（＝下から上に上がる）
+    return [...filteredLostItemsNewestFirst];
+  }, [filteredLostItemsNewestFirst]);
 
   // タブ一覧（必ずすべての種類タブの後に「すべて表示」が来るように保証）
   const allCartTabs = useMemo(() => {
@@ -700,6 +804,175 @@ export default function App() {
     });
     return sorted.find(ev => ev.date >= todayKey) || sorted[0] || null;
   }, [events, todayKey]);
+
+  // 落とし物操作関数
+  function openNewLostModal() {
+    setEditingLostItem(null);
+    setLostForm({
+      name: "",
+      foundLocation: "",
+      foundTime: formatNowTimeInput(),
+      finder: CURRENT_USER_NAME,
+      storageType: "警備本部",
+      storageOther: "",
+      comment: "",
+      existingPhotos: [],
+      newFiles: [],
+      newPreviews: []
+    });
+    setShowLostFormModal(true);
+  }
+
+  function openEditLostModal(item) {
+    setEditingLostItem(item);
+    setLostForm({
+      name: item.name || "",
+      foundLocation: item.foundLocation || "",
+      foundTime: item.foundTime || "",
+      finder: item.finder || CURRENT_USER_NAME,
+      storageType: item.storageType || "警備本部",
+      storageOther: item.storageOther || "",
+      comment: item.comment || "",
+      existingPhotos: Array.isArray(item.photos) ? [...item.photos] : [],
+      newFiles: [],
+      newPreviews: []
+    });
+    setShowLostFormModal(true);
+  }
+
+  async function handleLostPhotoSelect(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const previews = await Promise.all(files.map(f => fileToDataUrl(f)));
+    setLostForm(prev => ({
+      ...prev,
+      newFiles: [...prev.newFiles, ...files],
+      newPreviews: [...prev.newPreviews, ...previews]
+    }));
+    e.target.value = "";
+  }
+
+  function removeExistingLostPhoto(idx) {
+    setLostForm(prev => ({
+      ...prev,
+      existingPhotos: prev.existingPhotos.filter((_, i) => i !== idx)
+    }));
+  }
+
+  function removeNewLostPhoto(idx) {
+    setLostForm(prev => ({
+      ...prev,
+      newFiles: prev.newFiles.filter((_, i) => i !== idx),
+      newPreviews: prev.newPreviews.filter((_, i) => i !== idx)
+    }));
+  }
+
+  async function saveLostItem() {
+    if (!lostForm.name.trim() || savingLostItem) return;
+    if (lostForm.storageType === "その他" && !lostForm.storageOther.trim()) {
+      alert("「その他」を選択した場合は保管場所を入力してください。");
+      return;
+    }
+
+    setSavingLostItem(true);
+    try {
+      const itemId = editingLostItem ? editingLostItem.id : Date.now();
+      // 編集時でも初回投稿日時（createdAt）をそのまま保持する
+      const originalCreatedAt = editingLostItem ? editingLostItem.createdAt : new Date().toISOString();
+      const uploadedUrls = [];
+
+      if (lostForm.newFiles.length > 0) {
+        if (supabase) {
+          for (let i = 0; i < lostForm.newFiles.length; i++) {
+            const f = lostForm.newFiles[i];
+            const ext = getExtension(f.name) || "jpg";
+            const path = `lost_${itemId}_${Date.now()}_${i}.${ext}`;
+            const { error: upErr } = await supabase.storage
+              .from(DOC_BUCKET)
+              .upload(path, f, { upsert: false });
+            if (!upErr) {
+              const pubUrl = supabase.storage.from(DOC_BUCKET).getPublicUrl(path).data?.publicUrl || "";
+              if (pubUrl) uploadedUrls.push(pubUrl);
+            } else if (lostForm.newPreviews[i]) {
+              uploadedUrls.push(lostForm.newPreviews[i]);
+            }
+          }
+        } else {
+          uploadedUrls.push(...lostForm.newPreviews);
+        }
+      }
+
+      const finalPhotos = [...lostForm.existingPhotos, ...uploadedUrls];
+
+      const record = {
+        id: itemId,
+        name: lostForm.name.trim(),
+        foundLocation: lostForm.foundLocation.trim(),
+        foundTime: lostForm.foundTime.trim(),
+        finder: lostForm.finder.trim() || CURRENT_USER_NAME,
+        storageType: lostForm.storageType,
+        storageOther: lostForm.storageType === "その他" ? lostForm.storageOther.trim() : "",
+        comment: lostForm.comment.trim(),
+        status: editingLostItem ? editingLostItem.status : "保管中",
+        photos: finalPhotos,
+        createdAt: originalCreatedAt
+      };
+
+      if (editingLostItem) {
+        setLostItems(prev => prev.map(it => it.id === itemId ? record : it));
+        if (selectedLostDetail?.id === itemId) {
+          setSelectedLostDetail(record);
+        }
+      } else {
+        setLostItems(prev => [record, ...prev]);
+      }
+
+      if (supabase) {
+        await supabase.from("lost_items").upsert(toLostItemRow(record));
+      }
+
+      setShowLostFormModal(false);
+      setEditingLostItem(null);
+    } finally {
+      setSavingLostItem(false);
+    }
+  }
+
+  async function toggleLostItemStatus(item) {
+    const nextStatus = item.status === "保管中" ? "返却済" : "保管中";
+    const confirmMsg =
+      nextStatus === "返却済"
+        ? `「${item.name}」を返却済にしますか？`
+        : `「${item.name}」を保管中に戻しますか？`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const updated = { ...item, status: nextStatus };
+    setLostItems(prev => prev.map(it => it.id === item.id ? updated : it));
+    if (selectedLostDetail?.id === item.id) {
+      setSelectedLostDetail(updated);
+    }
+    if (supabase) {
+      await supabase.from("lost_items").update({ status: nextStatus }).eq("id", item.id);
+    }
+  }
+
+  async function deleteLostItem(id) {
+    if (!window.confirm("この落とし物データを削除しますか？")) return;
+    setLostItems(prev => prev.filter(it => it.id !== id));
+    if (selectedLostDetail?.id === id) {
+      setSelectedLostDetail(null);
+    }
+    if (supabase) {
+      await supabase.from("lost_items").delete().eq("id", id);
+    }
+  }
+
+  function renderStorageLabel(item) {
+    if (item.storageType === "その他") {
+      return item.storageOther ? `その他（${item.storageOther}）` : "その他";
+    }
+    return item.storageType || "警備本部";
+  }
 
   // お知らせ操作関数
   function openNoticeAddModal() {
@@ -1040,7 +1313,6 @@ export default function App() {
     }
   }
 
-  // タブ名の編集
   async function renameCartTab(oldTabName) {
     if (!oldTabName || oldTabName === "ALL") return;
     const input = window.prompt("新しいタブ名を入力してください。", oldTabName);
@@ -1076,7 +1348,6 @@ export default function App() {
     }
   }
 
-  // タブの削除
   async function deleteCartTab(tabName) {
     if (!tabName || tabName === "ALL") return;
     const belongingCarts = carts.filter(
@@ -1155,7 +1426,6 @@ export default function App() {
     setShowCartAddModal(true);
   }
 
-  // 上段：カレンダー・お知らせ／下段：資料共有・台車管理・鍵管理…
   const menuItems = [
     [CalendarDays, "カレンダー", "calendar"],
     [Megaphone, "お知らせ", "notices"],
@@ -1172,7 +1442,7 @@ export default function App() {
       <button
         type="button"
         className="brand-home-button"
-        onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); closeCartDetailModal(); }}
+        onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); closeCartDetailModal(); setSelectedLostDetail(null); }}
         aria-label="ホームへ戻る"
       >
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -1225,7 +1495,6 @@ export default function App() {
         ) : (
           <div className="notice-card" style={{cursor: "pointer"}} onClick={()=>setPage("notices")}>
             <strong>お知らせはまだありません</strong>
-            <p>「一覧を表示 →」またはメニューの「お知らせ」から作成できます。</p>
           </div>
         )}
 
@@ -1236,6 +1505,239 @@ export default function App() {
           <button className="menu-tile" onClick={()=>setPage("inquiry")}><MessageCircle/><span>問い合わせ</span></button>
           <button className="menu-tile" onClick={()=>setPage("admin")}><Settings/><span>管理者設定</span></button>
         </div>
+      </section>}
+
+      {/* 落とし物管理画面 */}
+      {page === "lost" && <section className="page">
+        <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
+        <p className="eyebrow">LOST & FOUND</p>
+        <div className="list-heading" style={{marginBottom: "10px"}}>
+          <div>
+            <h1 style={{marginBottom: "2px"}}>落とし物</h1>
+            <p className="muted" style={{margin: 0}}>拾得物の登録・保管状況・返却確認を行います。</p>
+          </div>
+          <button className="primary small" onClick={openNewLostModal}>
+            <Plus size={16}/> 追加
+          </button>
+        </div>
+
+        {/* 上部コントロールバー：左に「写真を表示 / リスト表示」、右に「保管中・返却済・すべて」 */}
+        <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "12px"}}>
+          <button
+            type="button"
+            onClick={()=>setLostViewMode(prev => prev === "list" ? "photos" : "list")}
+            style={{
+              border: "1px solid #203d64",
+              background: lostViewMode === "photos" ? "#203d64" : "#ffffff",
+              color: lostViewMode === "photos" ? "#ffffff" : "#203d64",
+              borderRadius: "9px",
+              padding: "7px 11px",
+              fontSize: "12px",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px"
+            }}
+          >
+            {lostViewMode === "list" ? <><Grid3X3 size={14}/> 写真を表示</> : <><List size={14}/> リスト表示</>}
+          </button>
+
+          <div style={{display: "inline-flex", background: "#eef2f6", padding: "3px", borderRadius: "9px", gap: "2px"}}>
+            {["保管中", "返却済", "すべて"].map(statusOption => {
+              const active = lostStatusFilter === statusOption;
+              return (
+                <button
+                  key={statusOption}
+                  type="button"
+                  onClick={()=>setLostStatusFilter(statusOption)}
+                  style={{
+                    border: "none",
+                    background: active ? "#203d64" : "transparent",
+                    color: active ? "#ffffff" : "#475569",
+                    borderRadius: "7px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  {statusOption}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 表示モード分岐：写真表示（横3枚・初回投稿日時・下から上に上がる並び順） vs プレビュー一覧 */}
+        {lostViewMode === "photos" ? (
+          filteredLostItemsBottomUp.length === 0 ? (
+            <div className="empty">該当する落とし物はありません。</div>
+          ) : (
+            <div style={{display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px"}}>
+              {filteredLostItemsBottomUp.map(item => {
+                const thumb = item.photos?.[0] || "";
+                const isReturned = item.status === "返却済";
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={()=>setSelectedLostDetail(item)}
+                    style={{
+                      position: "relative",
+                      aspectRatio: "1 / 1",
+                      borderRadius: "10px",
+                      overflow: "hidden",
+                      border: isReturned ? "2px solid #2b6843" : "1px solid #dfe5ec",
+                      background: "#f1f5f9",
+                      padding: 0,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                  >
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={item.name}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          opacity: isReturned ? 0.72 : 1
+                        }}
+                      />
+                    ) : (
+                      <div style={{display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", color: "#64748b", padding: "6px"}}>
+                        <Camera size={22}/>
+                        <span style={{fontSize: "11px", fontWeight: 700, textAlign: "center", wordBreak: "break-all"}}>{item.name}</span>
+                      </div>
+                    )}
+
+                    {/* 返却済の分かりやすいバッジ */}
+                    {isReturned && (
+                      <span style={{
+                        position: "absolute",
+                        top: "5px",
+                        right: "5px",
+                        background: "#2b6843",
+                        color: "#ffffff",
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        padding: "2px 6px",
+                        borderRadius: "6px",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.25)"
+                      }}>
+                        返却済
+                      </span>
+                    )}
+
+                    {/* 初回投稿日時ラベル（編集しても変わらない） */}
+                    <span style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      background: "rgba(15, 23, 42, 0.72)",
+                      color: "#ffffff",
+                      fontSize: "10px",
+                      fontWeight: 600,
+                      padding: "3px 5px",
+                      textAlign: "center"
+                    }}>
+                      {formatPostedDateTime(item.createdAt)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          <div className="file-list">
+            {filteredLostItemsNewestFirst.length === 0 ? (
+              <div className="empty">該当する落とし物はありません。</div>
+            ) : (
+              filteredLostItemsNewestFirst.map(item => {
+                const thumb = item.photos?.[0] || "";
+                const isReturned = item.status === "返却済";
+                return (
+                  <div
+                    className="file-row"
+                    key={item.id}
+                    onClick={()=>setSelectedLostDetail(item)}
+                    style={{
+                      alignItems: "flex-start",
+                      gap: "12px",
+                      cursor: "pointer",
+                      background: isReturned ? "#f4fbf7" : "#ffffff",
+                      borderColor: isReturned ? "#b7dfc6" : undefined
+                    }}
+                  >
+                    {/* プレビュー写真（1枚目のみ） */}
+                    <div style={{
+                      width: "74px",
+                      height: "74px",
+                      borderRadius: "10px",
+                      overflow: "hidden",
+                      background: "#f1f5f9",
+                      border: "1px solid #e2e8f0",
+                      flexShrink: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative"
+                    }}>
+                      {thumb ? (
+                        <img src={thumb} alt={item.name} style={{width: "100%", height: "100%", objectFit: "cover"}} />
+                      ) : (
+                        <Camera size={22} color="#94a3b8"/>
+                      )}
+                      {item.photos && item.photos.length > 1 && (
+                        <span style={{
+                          position: "absolute",
+                          bottom: "3px",
+                          right: "3px",
+                          background: "rgba(15,23,42,0.75)",
+                          color: "#fff",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          padding: "1px 5px",
+                          borderRadius: "5px"
+                        }}>
+                          +{item.photos.length - 1}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="file-info" style={{minWidth: 0}}>
+                      <div style={{display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap"}}>
+                        <strong style={{fontSize: "15px"}}>{item.name}</strong>
+                        <span style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          background: isReturned ? "#2b6843" : "#fef3c7",
+                          color: isReturned ? "#ffffff" : "#92400e"
+                        }}>
+                          {item.status}
+                        </span>
+                      </div>
+                      <small style={{marginTop: "3px"}}>
+                        場所: {item.foundLocation || "未記入"} ／ 時間: {item.foundTime || "未記入"}
+                      </small>
+                      <small>
+                        発見者: {item.finder} ／ 保管場所: <strong>{renderStorageLabel(item)}</strong>
+                      </small>
+                      {item.comment && <small className="file-note">{item.comment}</small>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
       </section>}
 
       {/* お知らせ一覧画面 */}
@@ -1254,7 +1756,7 @@ export default function App() {
 
         <div className="file-list">
           {sortedNotices.length === 0 ? (
-            <div className="empty">お知らせはまだ登録されていません。右上の「＋ 追加」から作成できます。</div>
+            <div className="empty">お知らせはまだ登録されていません。</div>
           ) : (
             sortedNotices.map(notice => (
               <div className="notice-card" key={notice.id} style={{marginBottom: "10px"}}>
@@ -1593,7 +2095,7 @@ export default function App() {
         <div className="placeholder">
           <ShieldCheck size={26}/>
           <strong>{supabase ? "Supabaseクラウド同期 有効" : "ローカル保存モード"}</strong>
-          <p>{supabase ? "お知らせ・予定・資料・鍵・台車データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
+          <p>{supabase ? "お知らせ・予定・資料・鍵・台車・落とし物データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
         </div>
       </section>}
 
@@ -1971,12 +2473,267 @@ export default function App() {
         )}
       </section>}
 
-      {page !== "home" && page !== "notices" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && page !== "carts" && <section className="page">
+      {page === "inquiry" && <section className="page">
         <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
-        <p className="eyebrow">YUPEI MOBILE</p><h1>{{lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
+        <p className="eyebrow">YUPEI MOBILE</p><h1>問い合わせ</h1>
         <div className="placeholder"><ShieldCheck size={28}/><strong>未実装</strong><p>この機能は未実装です。</p></div>
       </section>}
     </main>
+
+    {/* 落とし物 新規登録・編集モーダル */}
+    {showLostFormModal && <div className="modal-backdrop" onClick={()=>{setShowLostFormModal(false);setEditingLostItem(null);}}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
+      <div className="modal-head">
+        <h2>{editingLostItem ? "落とし物を編集" : "落とし物を登録"}</h2>
+        <button className="icon-button" onClick={()=>{setShowLostFormModal(false);setEditingLostItem(null);}}><X/></button>
+      </div>
+
+      <label className="field-label">落とし物の名前
+        <input
+          value={lostForm.name}
+          onChange={e=>setLostForm(v=>({...v, name: e.target.value}))}
+          placeholder="例：黒色の折りたたみ傘 / AirPodsケース"
+        />
+      </label>
+
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px"}}>
+        <label className="field-label">拾得場所
+          <input
+            value={lostForm.foundLocation}
+            onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))}
+            placeholder="例：中央棟 1F トイレ前"
+          />
+        </label>
+        <label className="field-label">時間
+          <input
+            type="time"
+            value={lostForm.foundTime}
+            onChange={e=>setLostForm(v=>({...v, foundTime: e.target.value}))}
+          />
+        </label>
+      </div>
+
+      <label className="field-label">発見者名（ログイン名自動反映）
+        <input
+          value={lostForm.finder}
+          onChange={e=>setLostForm(v=>({...v, finder: e.target.value}))}
+          placeholder="発見者名"
+        />
+      </label>
+
+      <div className="field-label" style={{marginTop: "10px"}}>
+        <span>保管場所</span>
+        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "6px"}}>
+          {["警備本部", "その他"].map(opt => {
+            const active = lostForm.storageType === opt;
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={()=>setLostForm(v=>({...v, storageType: opt}))}
+                style={{
+                  padding: "9px",
+                  borderRadius: "9px",
+                  border: active ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+                  background: active ? "#203d64" : "#ffffff",
+                  color: active ? "#ffffff" : "#1e293b",
+                  fontWeight: 700,
+                  fontSize: "13px",
+                  cursor: "pointer"
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        {lostForm.storageType === "その他" && (
+          <input
+            style={{marginTop: "8px"}}
+            value={lostForm.storageOther}
+            onChange={e=>setLostForm(v=>({...v, storageOther: e.target.value}))}
+            placeholder="例：発見者（藤﨑）が所持 / 雄飛室デスク"
+          />
+        )}
+      </div>
+
+      <div className="field-label" style={{marginTop: "10px"}}>
+        <span>写真（複数枚選択可・1枚目がプレビューに表示されます）</span>
+        <label className="upload-zone" style={{marginTop: "6px", padding: "14px"}}>
+          <Camera size={24}/>
+          <strong>写真を追加する</strong>
+          <small>複数選択または追加で複数枚登録できます</small>
+          <input type="file" accept="image/*" multiple onChange={handleLostPhotoSelect}/>
+        </label>
+
+        {(lostForm.existingPhotos.length > 0 || lostForm.newPreviews.length > 0) && (
+          <div style={{display: "flex", gap: "8px", overflowX: "auto", padding: "8px 0"}}>
+            {lostForm.existingPhotos.map((src, idx) => (
+              <div key={`ex-${idx}`} style={{position: "relative", width: "76px", height: "76px", borderRadius: "8px", overflow: "hidden", flexShrink: 0, border: "1px solid #cbd5e1"}}>
+                <img src={src} alt="" style={{width: "100%", height: "100%", objectFit: "cover"}}/>
+                <button
+                  type="button"
+                  onClick={()=>removeExistingLostPhoto(idx)}
+                  style={{position: "absolute", top: "2px", right: "2px", background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: "999px", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"}}
+                >
+                  <X size={12}/>
+                </button>
+              </div>
+            ))}
+            {lostForm.newPreviews.map((src, idx) => (
+              <div key={`new-${idx}`} style={{position: "relative", width: "76px", height: "76px", borderRadius: "8px", overflow: "hidden", flexShrink: 0, border: "1px solid #203d64"}}>
+                <img src={src} alt="" style={{width: "100%", height: "100%", objectFit: "cover"}}/>
+                <button
+                  type="button"
+                  onClick={()=>removeNewLostPhoto(idx)}
+                  style={{position: "absolute", top: "2px", right: "2px", background: "rgba(0,0,0,0.65)", color: "#fff", border: "none", borderRadius: "999px", width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"}}
+                >
+                  <X size={12}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <label className="field-label">コメント（任意）
+        <textarea
+          rows={3}
+          value={lostForm.comment}
+          onChange={e=>setLostForm(v=>({...v, comment: e.target.value}))}
+          placeholder="特徴や補足事項など（任意）"
+        />
+      </label>
+
+      <button
+        className="primary full"
+        style={{marginTop: "12px"}}
+        disabled={!lostForm.name.trim() || savingLostItem}
+        onClick={saveLostItem}
+      >
+        {savingLostItem ? "保存中..." : (editingLostItem ? "更新を保存" : "登録する")}
+      </button>
+    </div></div>}
+
+    {/* 落とし物 詳細モーダル（横スクロール写真閲覧・編集・返却済切替） */}
+    {selectedLostDetail && <div className="modal-backdrop" onClick={()=>setSelectedLostDetail(null)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
+      <div className="modal-head">
+        <div style={{display: "flex", alignItems: "center", gap: "8px"}}>
+          <h2 style={{margin: 0}}>{selectedLostDetail.name}</h2>
+          <span style={{
+            fontSize: "12px",
+            fontWeight: 700,
+            padding: "3px 10px",
+            borderRadius: "999px",
+            background: selectedLostDetail.status === "返却済" ? "#2b6843" : "#fef3c7",
+            color: selectedLostDetail.status === "返却済" ? "#ffffff" : "#92400e"
+          }}>
+            {selectedLostDetail.status}
+          </span>
+        </div>
+        <button className="icon-button" onClick={()=>setSelectedLostDetail(null)}><X/></button>
+      </div>
+
+      {/* 写真の横スクロールギャラリー */}
+      {selectedLostDetail.photos && selectedLostDetail.photos.length > 0 ? (
+        <div style={{margin: "12px 0"}}>
+          <div style={{
+            display: "flex",
+            gap: "10px",
+            overflowX: "auto",
+            scrollSnapType: "x mandatory",
+            paddingBottom: "6px"
+          }}>
+            {selectedLostDetail.photos.map((photoUrl, idx) => (
+              <div
+                key={idx}
+                style={{
+                  flex: "0 0 85%",
+                  maxWidth: "300px",
+                  aspectRatio: "4 / 3",
+                  borderRadius: "12px",
+                  overflow: "hidden",
+                  border: "1px solid #dfe5ec",
+                  background: "#f8fafc",
+                  scrollSnapAlign: "start"
+                }}
+              >
+                <img
+                  src={photoUrl}
+                  alt={`${selectedLostDetail.name} (${idx + 1})`}
+                  style={{width: "100%", height: "100%", objectFit: "cover"}}
+                />
+              </div>
+            ))}
+          </div>
+          {selectedLostDetail.photos.length > 1 && (
+            <small style={{color: "#64748b"}}>横にスワイプ・スクロールして全{selectedLostDetail.photos.length}枚の写真を確認できます</small>
+          )}
+        </div>
+      ) : (
+        <div className="empty" style={{margin: "12px 0"}}>写真は登録されていません。</div>
+      )}
+
+      <div className="notice-card" style={{margin: "10px 0"}}>
+        <p style={{margin: "0 0 6px"}}><strong>拾得場所:</strong> {selectedLostDetail.foundLocation || "未記入"}</p>
+        <p style={{margin: "0 0 6px"}}><strong>時間:</strong> {selectedLostDetail.foundTime || "未記入"}</p>
+        <p style={{margin: "0 0 6px"}}><strong>発見者名:</strong> {selectedLostDetail.finder}</p>
+        <p style={{margin: "0 0 6px"}}><strong>保管場所:</strong> {renderStorageLabel(selectedLostDetail)}</p>
+        <p style={{margin: "0 0 6px"}}><strong>初回登録日時:</strong> {formatPostedDateTime(selectedLostDetail.createdAt)}</p>
+        {selectedLostDetail.comment && (
+          <p style={{margin: "8px 0 0", paddingTop: "8px", borderTop: "1px solid #e2e8f0", whiteSpace: "pre-wrap"}}>
+            <strong>コメント:</strong> {selectedLostDetail.comment}
+          </p>
+        )}
+      </div>
+
+      {/* アクションボタン（返却済切替・編集・削除） */}
+      <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "12px"}}>
+        <button
+          type="button"
+          className="primary"
+          style={{
+            flex: 1,
+            background: selectedLostDetail.status === "保管中" ? "#2b6843" : "#475569",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px"
+          }}
+          onClick={()=>toggleLostItemStatus(selectedLostDetail)}
+        >
+          <CheckCircle2 size={16}/>
+          {selectedLostDetail.status === "保管中" ? "返却済にする" : "保管中に戻す"}
+        </button>
+
+        <button
+          type="button"
+          className="secondary small"
+          style={{
+            border: "1px solid #dfe5ec",
+            background: "#fff",
+            borderRadius: "10px",
+            padding: "10px 14px",
+            fontSize: "13px",
+            fontWeight: 700,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px"
+          }}
+          onClick={()=>openEditLostModal(selectedLostDetail)}
+        >
+          <Pencil size={15}/> 編集
+        </button>
+
+        <button
+          type="button"
+          className="danger-outline"
+          onClick={()=>deleteLostItem(selectedLostDetail.id)}
+        >
+          <Trash2 size={16}/> 削除
+        </button>
+      </div>
+    </div></div>}
 
     {/* お知らせ新規作成モーダル */}
     {showNoticeAddModal && <div className="modal-backdrop" onClick={()=>setShowNoticeAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
@@ -2013,7 +2770,6 @@ export default function App() {
       <div className="field-label" style={{marginTop: "12px"}}>
         <span>公開設定（複数選択可）</span>
         <div style={{border: "1px solid #dfe5ec", borderRadius: "10px", padding: "8px", marginTop: "6px", background: "#f8fafc"}}>
-          {/* 全体公開チェックボックス */}
           <label style={{display: "flex", alignItems: "center", gap: "8px", padding: "6px 4px", fontWeight: 700, cursor: "pointer"}}>
             <input
               type="checkbox"
@@ -2023,7 +2779,6 @@ export default function App() {
             <span>全体公開</span>
           </label>
 
-          {/* 局ごとの表示（班がある局はタップで展開） */}
           {departments.map(dept => {
             const teams = teamsByDepartment[dept] || [];
             const hasTeams = teams.length > 0;
