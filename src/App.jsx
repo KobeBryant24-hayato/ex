@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Home, CalendarDays, KeyRound, FolderOpen, Truck, Search, Plus,
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
@@ -6,6 +6,8 @@ import {
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
   CalendarCog, ChevronRight, MapPin, Clock, Pencil
 } from "lucide-react";
+
+const STORAGE_KEY = "yupei_mobile_state_v1";
 
 const initialDepartments = [
   "運営管理局", "ステージPA局", "総務局", "渉外局",
@@ -17,6 +19,68 @@ const initialDocs = [
   { id: 2, name: "ステージ音響機材一覧.xlsx", dept: "ステージPA局", scope: "ステージPA局", targetTeam: "", note: "使用機材と数量の一覧", updated: "2026-11-12T15:30:00", owner: "PA 藤﨑", comments: [] },
   { id: 3, name: "警備配置図.pdf", dept: "警備局", scope: "警備局", targetTeam: "トランシーバー班", note: "", updated: "2026-11-11T09:20:00", owner: "警備 佐藤", comments: ["配置の確認をお願いします。"] }
 ];
+
+const initialKeys = [
+  { id: 1, name: "フリスペ 101", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 2, name: "フリスペ 102", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 3, name: "フリスペ 103", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 4, name: "フリスペ 105", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 5, name: "フリスペ 106", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 6, name: "フリスペ 107", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 7, name: "フリスペ 108", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 8, name: "フリスペ 109", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 9, name: "フリスペ 3（多目的スペース3）", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
+  { id: 10, name: "ミーティングルーム 1〜4", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 11, name: "小講堂", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 12, name: "暁月ホール（暁月）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 13, name: "柊（ひいらぎ）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 14, name: "楓（かえで）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 15, name: "楠（くすのき）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 16, name: "桜（さくら）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 17, name: "黎明ホール", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 18, name: "音練場・音練場倉庫", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 19, name: "音楽練習場", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 20, name: "スペース2", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 21, name: "天真館", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
+  { id: 22, name: "4棟 301", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] }
+];
+
+const initialTeamsByDepartment = {
+  "運営管理局": ["衛生班", "エポ班", "火器班", "ダスキン班", "デンポ班"],
+  "ステージPA局": [],
+  "総務局": [],
+  "渉外局": [],
+  "情報局": ["広告班", "広報班", "パンフ班"],
+  "企画局": ["テント班", "プロコン班", "ホラー班", "開閉班"],
+  "警備局": ["看板・自転車班", "イルミ班", "トランシーバー班"],
+  "財務局": []
+};
+
+const initialMembers = [
+  { id: 1, name: "藤﨑", email: "pa@example.com", dept: "ステージPA局", team: "未設定", role: "委員", active: true },
+  { id: 2, name: "佐藤", email: "security@example.com", dept: "警備局", team: "トランシーバー班", role: "局長", active: true }
+];
+
+const initialPermissions = {
+  "委員長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
+  "副委員長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
+  "監査": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
+  "局長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
+  "局次": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
+  "班長": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
+  "委員": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
+  "事務課": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true}
+};
+
+function loadSavedState() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 function formatDateKey(dateObj) {
   const y = dateObj.getFullYear();
@@ -38,40 +102,48 @@ function fileIcon(name) {
 export default function App() {
   const todayObj = new Date();
   const todayKey = formatDateKey(todayObj);
+  const saved = useMemo(() => loadSavedState(), []);
 
   const [page, setPage] = useState("home");
   const [section, setSection] = useState("委員会活動全体");
-  const [docs, setDocs] = useState(initialDocs);
+  const [docs, setDocs] = useState(() =>
+    Array.isArray(saved?.docs)
+      ? saved.docs.map(({ file, ...rest }) => rest)
+      : initialDocs
+  );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
 
-  // カレンダー用ステート
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      title: "雄飛祭 実行委員会全体会議",
-      date: todayKey,
-      startTime: "17:00",
-      endTime: "18:30",
-      location: "中央棟 / 学生センターフリースペース",
-      scope: "全体公開",
-      targetTeam: "",
-      note: "各局の進捗共有と当日の動きの確認"
-    },
-    {
-      id: 2,
-      title: "警備配置・トランシーバー確認",
-      date: todayKey,
-      startTime: "18:45",
-      endTime: "19:30",
-      location: "正門・西門周辺",
-      scope: "警備局",
-      targetTeam: "トランシーバー班",
-      note: "入構許可証の確認手順もあわせて共有"
-    }
-  ]);
+  const [events, setEvents] = useState(() =>
+    Array.isArray(saved?.events)
+      ? saved.events
+      : [
+          {
+            id: 1,
+            title: "雄飛祭 実行委員会全体会議",
+            date: todayKey,
+            startTime: "17:00",
+            endTime: "18:30",
+            location: "中央棟 / 学生センターフリースペース",
+            scope: "全体公開",
+            targetTeam: "",
+            note: "各局の進捗共有と当日の動きの確認"
+          },
+          {
+            id: 2,
+            title: "警備配置・トランシーバー確認",
+            date: todayKey,
+            startTime: "18:45",
+            endTime: "19:30",
+            location: "正門・西門周辺",
+            scope: "警備局",
+            targetTeam: "トランシーバー班",
+            note: "入構許可証の確認手順もあわせて共有"
+          }
+        ]
+  );
   const [showEventModal, setShowEventModal] = useState(false);
   const [editingEventId, setEditingEventId] = useState(null);
   const [eventForm, setEventForm] = useState({
@@ -85,30 +157,7 @@ export default function App() {
     note: ""
   });
 
-  const [keys, setKeys] = useState([
-    { id: 1, name: "フリスペ 101", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 2, name: "フリスペ 102", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 3, name: "フリスペ 103", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 4, name: "フリスペ 105", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 5, name: "フリスペ 106", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 6, name: "フリスペ 107", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 7, name: "フリスペ 108", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 8, name: "フリスペ 109", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 9, name: "フリスペ 3（多目的スペース3）", status: "保管中", holder: "-", location: "副委員長デスク", history: [] },
-    { id: 10, name: "ミーティングルーム 1〜4", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 11, name: "小講堂", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 12, name: "暁月ホール（暁月）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 13, name: "柊（ひいらぎ）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 14, name: "楓（かえで）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 15, name: "楠（くすのき）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 16, name: "桜（さくら）", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 17, name: "黎明ホール", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 18, name: "音練場・音練場倉庫", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 19, name: "音楽練習場", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 20, name: "スペース2", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 21, name: "天真館", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] },
-    { id: 22, name: "4棟 301", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] }
-  ]);
+  const [keys, setKeys] = useState(() => Array.isArray(saved?.keys) ? saved.keys : initialKeys);
   const [showLentModal, setShowLentModal] = useState(false);
   const [selectedKeyDetail, setSelectedKeyDetail] = useState(null);
   const [keySearch, setKeySearch] = useState("");
@@ -121,24 +170,16 @@ export default function App() {
   const [targetTeam, setTargetTeam] = useState("");
   const [note, setNote] = useState("");
   const [comment, setComment] = useState("");
-  const [departments, setDepartments] = useState(initialDepartments);
-  const [teamsByDepartment, setTeamsByDepartment] = useState({
-    "運営管理局": ["衛生班", "エポ班", "火器班", "ダスキン班", "デンポ班"],
-    "ステージPA局": [],
-    "総務局": [],
-    "渉外局": [],
-    "情報局": ["広告班", "広報班", "パンフ班"],
-    "企画局": ["テント班", "プロコン班", "ホラー班", "開閉班"],
-    "警備局": ["看板・自転車班", "イルミ班", "トランシーバー班"],
-    "財務局": []
-  });
+  const [departments, setDepartments] = useState(() => Array.isArray(saved?.departments) ? saved.departments : initialDepartments);
+  const [teamsByDepartment, setTeamsByDepartment] = useState(() =>
+    saved?.teamsByDepartment && typeof saved.teamsByDepartment === "object"
+      ? saved.teamsByDepartment
+      : initialTeamsByDepartment
+  );
   const [selectedDept, setSelectedDept] = useState("運営管理局");
   const [newDepartment, setNewDepartment] = useState("");
   const [newTeam, setNewTeam] = useState("");
-  const [members, setMembers] = useState([
-    { id: 1, name: "藤﨑", email: "pa@example.com", dept: "ステージPA局", team: "未設定", role: "委員", active: true },
-    { id: 2, name: "佐藤", email: "security@example.com", dept: "警備局", team: "トランシーバー班", role: "局長", active: true }
-  ]);
+  const [members, setMembers] = useState(() => Array.isArray(saved?.members) ? saved.members : initialMembers);
   const [memberForm, setMemberForm] = useState({ name: "", email: "", dept: "運営管理局", team: "", role: "委員" });
   const [showMemberForm, setShowMemberForm] = useState(false);
 
@@ -150,23 +191,38 @@ export default function App() {
     ["manageMembers", "委員・アカウント管理"],
     ["manageOrg", "局・班の管理"]
   ];
-  const [permissions, setPermissions] = useState({
-    "委員長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
-    "副委員長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
-    "監査": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
-    "局長": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true},
-    "局次": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
-    "班長": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
-    "委員": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
-    "事務課": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true}
-  });
+  const [permissions, setPermissions] = useState(() =>
+    saved?.permissions && typeof saved.permissions === "object"
+      ? saved.permissions
+      : initialPermissions
+  );
+
+  // 入力・変更内容をブラウザのlocalStorageに自動保存
+  useEffect(() => {
+    try {
+      const serializableDocs = docs.map(({ file: _file, ...rest }) => rest);
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          docs: serializableDocs,
+          events,
+          keys,
+          departments,
+          teamsByDepartment,
+          members,
+          permissions
+        })
+      );
+    } catch {
+      // 容量制限などで保存できない場合は無視
+    }
+  }, [docs, events, keys, departments, teamsByDepartment, members, permissions]);
 
   const visibleDocs = useMemo(() => docs
     .filter(d => d.dept === section)
     .filter(d => d.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b) => new Date(b.updated) - new Date(a.updated)), [docs, section, search]);
 
-  // カレンダーグリッド生成
   const calendarCells = useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
@@ -310,7 +366,7 @@ export default function App() {
   }
 
   function downloadDoc(doc) {
-    if (!doc.file) { alert("サンプル資料のためダウンロードできません。データベース連携後に利用可能になります。"); return; }
+    if (!doc.file) { alert("再読み込み後の資料またはサンプル資料のため、この画面単体ではダウンロードできません。Supabase連携後に利用可能になります。"); return; }
     const url = URL.createObjectURL(doc.file);
     const a = document.createElement("a"); a.href = url; a.download = doc.name; a.click();
     URL.revokeObjectURL(url);
@@ -580,8 +636,8 @@ export default function App() {
         </div>
         <div className="placeholder">
           <ShieldCheck size={26}/>
-          <strong>管理者機能（試作版）</strong>
-          <p>データベース連携後に実際の権限・アカウント制御が有効になります。</p>
+          <strong>ブラウザ保存有効中（試作版）</strong>
+          <p>このブラウザ内のデータは自動保存されます。複数人で共有・永続保存するにはSupabase連携が必要です。</p>
         </div>
       </section>}
 
@@ -608,7 +664,7 @@ export default function App() {
             </label>)}
           </div>
         </div>)}
-        <p className="fine-print">※現在は画面上の試作状態です。データベース導入時にサーバー側でも同じ権限チェックを適用します。</p>
+        <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有にはSupabase連携が必要です。</p>
       </section>}
 
       {page === "admin-members" && <section className="page">
@@ -632,7 +688,7 @@ export default function App() {
             <button className="danger-outline member-toggle" onClick={()=>setMembers(prev=>prev.map(m=>m.id===member.id?{...m,active:!m.active}:m))}>{member.active ? "停止" : "再開"}</button>
           </div>)}
         </div>
-        <p className="fine-print">※現在は試作用データです。データベース接続後に永続保存および招待メール送信が有効になります。</p>
+        <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有や招待メール送信はSupabase連携後に有効になります。</p>
       </section>}
 
       {page === "admin-structure" && <section className="page">
@@ -878,7 +934,7 @@ export default function App() {
         setMemberForm({name:"",email:"",dept:"運営管理局",team:"",role:"委員"});setShowMemberForm(false);
         alert("登録しました。");
       }}>登録</button>
-      <p className="fine-print">※データベース接続後に永続保存および招待メール送信が有効になります。</p>
+      <p className="fine-print">※現在はブラウザ内に自動保存されます。複数端末・複数人での共有や招待メール送信はSupabase連携後に有効になります。</p>
     </div></div>}
 
     {showUpload && <div className="modal-backdrop" onClick={()=>setShowUpload(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -906,7 +962,7 @@ export default function App() {
       )}
       <label className="field-label">説明・備考（任意）<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="資料についての説明"/></label>
       <button className="primary full" disabled={!file} onClick={upload}>登録</button>
-      <p className="fine-print">※データベース連携後、サーバー側でも公開範囲に応じた閲覧権限を制御します。</p>
+      <p className="fine-print">※資料のメタデータやコメントはブラウザに保存されます。ファイル実体の共有や閲覧権限制御はSupabase連携後に有効になります。</p>
     </div></div>}
 
     {selected && <div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
