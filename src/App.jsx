@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import {
   Home, CalendarDays, KeyRound, FolderOpen, Truck, Search, Plus,
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
@@ -8,6 +9,14 @@ import {
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
+const DOC_BUCKET = "yupei-docs";
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null;
 
 const initialDepartments = [
   "運営管理局", "ステージPA局", "総務局", "渉外局",
@@ -15,9 +24,9 @@ const initialDepartments = [
 ];
 
 const initialDocs = [
-  { id: 1, name: "雄飛祭全体スケジュール.pdf", dept: "委員会活動全体", scope: "全体公開", targetTeam: "", note: "全体の準備日程・当日スケジュール", updated: "2026-11-13T10:00:00", owner: "委員長", comments: ["最新版を掲載しました。"] },
-  { id: 2, name: "ステージ音響機材一覧.xlsx", dept: "ステージPA局", scope: "ステージPA局", targetTeam: "", note: "使用機材と数量の一覧", updated: "2026-11-12T15:30:00", owner: "PA 藤﨑", comments: [] },
-  { id: 3, name: "警備配置図.pdf", dept: "警備局", scope: "警備局", targetTeam: "トランシーバー班", note: "", updated: "2026-11-11T09:20:00", owner: "警備 佐藤", comments: ["配置の確認をお願いします。"] }
+  { id: 1, name: "雄飛祭全体スケジュール.pdf", dept: "委員会活動全体", scope: "全体公開", targetTeam: "", note: "全体の準備日程・当日スケジュール", updated: "2026-11-13T10:00:00", owner: "委員長", comments: ["最新版を掲載しました。"], fileUrl: "", storagePath: "" },
+  { id: 2, name: "ステージ音響機材一覧.xlsx", dept: "ステージPA局", scope: "ステージPA局", targetTeam: "", note: "使用機材と数量の一覧", updated: "2026-11-12T15:30:00", owner: "PA 藤﨑", comments: [], fileUrl: "", storagePath: "" },
+  { id: 3, name: "警備配置図.pdf", dept: "警備局", scope: "警備局", targetTeam: "トランシーバー班", note: "", updated: "2026-11-11T09:20:00", owner: "警備 佐藤", comments: ["配置の確認をお願いします。"], fileUrl: "", storagePath: "" }
 ];
 
 const initialKeys = [
@@ -103,6 +112,82 @@ function fileIcon(name) {
   return <FileText />;
 }
 
+function mapEventRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    date: row.date,
+    startTime: row.start_time || "",
+    endTime: row.end_time || "",
+    location: row.location || "",
+    scope: row.scope || "全体公開",
+    targetTeam: row.target_team || "",
+    note: row.note || ""
+  };
+}
+
+function toEventRow(ev) {
+  return {
+    id: ev.id,
+    title: ev.title,
+    date: ev.date,
+    start_time: ev.startTime || "",
+    end_time: ev.endTime || "",
+    location: ev.location || "",
+    scope: ev.scope || "全体公開",
+    target_team: ev.targetTeam || "",
+    note: ev.note || ""
+  };
+}
+
+function mapDocRow(row) {
+  const storagePath = row.storage_path || "";
+  const publicUrl =
+    supabase && storagePath
+      ? supabase.storage.from(DOC_BUCKET).getPublicUrl(storagePath).data?.publicUrl || ""
+      : "";
+
+  return {
+    id: row.id,
+    name: row.name,
+    dept: row.dept,
+    scope: row.scope,
+    targetTeam: row.target_team || "",
+    note: row.note || "",
+    updated: row.updated,
+    owner: row.owner || "ログインユーザー",
+    comments: Array.isArray(row.comments) ? row.comments : [],
+    storagePath,
+    fileUrl: publicUrl
+  };
+}
+
+function toDocRow(doc) {
+  return {
+    id: doc.id,
+    name: doc.name,
+    dept: doc.dept,
+    scope: doc.scope,
+    target_team: doc.targetTeam || "",
+    note: doc.note || "",
+    updated: doc.updated,
+    owner: doc.owner || "ログインユーザー",
+    comments: Array.isArray(doc.comments) ? doc.comments : [],
+    storage_path: doc.storagePath || ""
+  };
+}
+
+function mapKeyRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status || "保管中",
+    holder: row.holder || "-",
+    location: row.location || "雄飛室・鍵ボックス",
+    history: Array.isArray(row.history) ? row.history : []
+  };
+}
+
 export default function App() {
   const todayObj = new Date();
   const todayKey = formatDateKey(todayObj);
@@ -117,6 +202,7 @@ export default function App() {
   );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -202,6 +288,52 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (!supabase) return;
+
+    let active = true;
+
+    async function syncFromSupabase() {
+      const [{ data: evRows, error: evErr }, { data: docRows, error: docErr }, { data: keyRows, error: keyErr }] =
+        await Promise.all([
+          supabase.from("events").select("*").order("id", { ascending: true }),
+          supabase.from("documents").select("*").order("updated", { ascending: false }),
+          supabase.from("keys").select("*").order("id", { ascending: true })
+        ]);
+
+      if (!active) return;
+
+      if (!evErr && Array.isArray(evRows)) {
+        if (evRows.length > 0) {
+          setEvents(evRows.map(mapEventRow));
+        } else {
+          await supabase.from("events").upsert(events.map(toEventRow));
+        }
+      }
+
+      if (!docErr && Array.isArray(docRows)) {
+        if (docRows.length > 0) {
+          setDocs(docRows.map(mapDocRow));
+        } else {
+          await supabase.from("documents").upsert(docs.map(toDocRow));
+        }
+      }
+
+      if (!keyErr && Array.isArray(keyRows)) {
+        if (keyRows.length > 0) {
+          setKeys(keyRows.map(mapKeyRow));
+        } else {
+          await supabase.from("keys").upsert(keys);
+        }
+      }
+    }
+
+    syncFromSupabase();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       const serializableDocs = docs.map(({ file: _file, ...rest }) => rest);
       window.localStorage.setItem(
@@ -217,7 +349,7 @@ export default function App() {
         })
       );
     } catch {
-      // 容量制限などで保存できない場合は無視
+      // 無視
     }
   }, [docs, events, keys, departments, teamsByDepartment, members, permissions]);
 
@@ -302,7 +434,7 @@ export default function App() {
     setShowEventModal(true);
   }
 
-  function saveEvent() {
+  async function saveEvent() {
     if (!eventForm.title.trim() || !eventForm.date) return;
     const availableTeams = eventForm.scope !== "全体公開" ? (teamsByDepartment[eventForm.scope] || []) : [];
     const resolvedTeam = availableTeams.length > 0 ? eventForm.targetTeam : "";
@@ -318,10 +450,17 @@ export default function App() {
       note: eventForm.note.trim()
     };
 
+    let targetRecord;
     if (editingEventId !== null) {
-      setEvents(prev => prev.map(ev => ev.id === editingEventId ? { ...ev, ...payload } : ev));
+      targetRecord = { id: editingEventId, ...payload };
+      setEvents(prev => prev.map(ev => ev.id === editingEventId ? targetRecord : ev));
     } else {
-      setEvents(prev => [...prev, { id: Date.now(), ...payload }]);
+      targetRecord = { id: Date.now(), ...payload };
+      setEvents(prev => [...prev, targetRecord]);
+    }
+
+    if (supabase) {
+      await supabase.from("events").upsert(toEventRow(targetRecord));
     }
 
     setSelectedDate(eventForm.date);
@@ -333,9 +472,12 @@ export default function App() {
     setShowEventModal(false);
   }
 
-  function deleteEvent(id) {
+  async function deleteEvent(id) {
     if (!window.confirm("この予定を削除しますか？")) return;
     setEvents(prev => prev.filter(ev => ev.id !== id));
+    if (supabase) {
+      await supabase.from("events").delete().eq("id", id);
+    }
   }
 
   function openUploadModal() {
@@ -347,65 +489,141 @@ export default function App() {
     setShowUpload(true);
   }
 
-  function upload() {
-    if (!file) return;
-    const now = new Date().toISOString();
-    const availableTeams = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
-    const resolvedTeam = availableTeams.length > 0 ? targetTeam : "";
-    const resolvedDept = scope === "全体公開" ? "委員会活動全体" : scope;
+  async function upload() {
+    if (!file || uploadingDoc) return;
+    setUploadingDoc(true);
 
-    setDocs(prev => [{
-      id: Date.now(),
-      name: file.name,
-      file,
-      dept: resolvedDept,
-      scope,
-      targetTeam: resolvedTeam,
-      note,
-      updated: now,
-      owner: "ログインユーザー",
-      comments: []
-    }, ...prev]);
+    try {
+      const now = new Date().toISOString();
+      const availableTeams = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
+      const resolvedTeam = availableTeams.length > 0 ? targetTeam : "";
+      const resolvedDept = scope === "全体公開" ? "委員会活動全体" : scope;
+      const docId = Date.now();
 
-    setSection(resolvedDept);
-    setSearch("");
-    setFile(null);
-    setNote("");
-    setScope("全体公開");
-    setTargetTeam("");
-    setShowUpload(false);
+      let storagePath = "";
+      let fileUrl = "";
+
+      if (supabase) {
+        const safeExt = getExtension(file.name);
+        storagePath = `${docId}_${Math.random().toString(36).slice(2, 8)}${safeExt ? `.${safeExt}` : ""}`;
+        const { error: uploadErr } = await supabase.storage
+          .from(DOC_BUCKET)
+          .upload(storagePath, file, { upsert: false });
+
+        if (uploadErr) {
+          alert(`ファイルのアップロードに失敗しました: ${uploadErr.message}`);
+          setUploadingDoc(false);
+          return;
+        }
+        fileUrl = supabase.storage.from(DOC_BUCKET).getPublicUrl(storagePath).data?.publicUrl || "";
+      } else {
+        fileUrl = URL.createObjectURL(file);
+      }
+
+      const newDoc = {
+        id: docId,
+        name: file.name,
+        file: supabase ? null : file,
+        fileUrl,
+        storagePath,
+        dept: resolvedDept,
+        scope,
+        targetTeam: resolvedTeam,
+        note,
+        updated: now,
+        owner: "ログインユーザー",
+        comments: []
+      };
+
+      setDocs(prev => [newDoc, ...prev]);
+
+      if (supabase) {
+        const { error: dbErr } = await supabase.from("documents").insert(toDocRow(newDoc));
+        if (dbErr) {
+          alert(`資料情報の保存に失敗しました: ${dbErr.message}`);
+        }
+      }
+
+      setSection(resolvedDept);
+      setSearch("");
+      setFile(null);
+      setNote("");
+      setScope("全体公開");
+      setTargetTeam("");
+      setShowUpload(false);
+    } finally {
+      setUploadingDoc(false);
+    }
   }
 
-  function addComment() {
+  async function addComment() {
     if (!comment.trim() || !selected) return;
-    const updated = docs.map(d => d.id === selected.id ? {...d, comments: [...d.comments, comment.trim()]} : d);
-    setDocs(updated); setSelected(updated.find(d => d.id === selected.id)); setComment("");
+    const nextComments = [...selected.comments, comment.trim()];
+    const updatedDoc = { ...selected, comments: nextComments };
+    setDocs(prev => prev.map(d => d.id === selected.id ? updatedDoc : d));
+    setSelected(updatedDoc);
+    setComment("");
+
+    if (supabase) {
+      await supabase.from("documents").update({ comments: nextComments }).eq("id", selected.id);
+    }
   }
 
-  function removeDoc(id) {
+  async function removeDoc(id) {
     if (!window.confirm("この資料を完全に削除しますか？この操作は取り消せません。")) return;
+    const target = docs.find(d => d.id === id);
     setDocs(prev => prev.filter(d => d.id !== id));
     if (selected?.id === id) setSelected(null);
+
+    if (supabase) {
+      if (target?.storagePath) {
+        await supabase.storage.from(DOC_BUCKET).remove([target.storagePath]);
+      }
+      await supabase.from("documents").delete().eq("id", id);
+    }
   }
 
   function openInBrowserTab(doc) {
-    if (!doc.file) {
-      alert("この端末のブラウザメモリにファイル実体がないため開けません。別の端末（PC・スマホ）で共有したり再読み込み後も開いたりするにはSupabase連携が必要です。");
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, "_blank", "noopener,noreferrer");
       return;
     }
-    const url = URL.createObjectURL(doc.file);
-    window.open(url, "_blank", "noopener,noreferrer");
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    if (doc.file) {
+      const url = URL.createObjectURL(doc.file);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return;
+    }
+    alert("この資料はサンプルデータまたは未保存のためブラウザで開けません。");
   }
 
   function downloadDoc(doc) {
+    if (doc.fileUrl) {
+      const a = document.createElement("a");
+      a.href = doc.fileUrl;
+      a.download = doc.name;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.click();
+      return;
+    }
     if (!doc.file) {
-      alert("この端末のブラウザメモリにファイル実体がないためダウンロードできません。別の端末（PC・スマホ）で共有したり再読み込み後も開いたりするにはSupabase連携が必要です。");
+      alert("この資料はサンプルデータまたは未保存のためダウンロードできません。");
       return;
     }
     const url = URL.createObjectURL(doc.file);
     const a = document.createElement("a"); a.href = url; a.download = doc.name; a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function updateKeyRecord(nextKey) {
+    setKeys(prev => prev.map(item => item.id === nextKey.id ? nextKey : item));
+    if (selectedKeyDetail?.id === nextKey.id) {
+      setSelectedKeyDetail(nextKey);
+    }
+    if (supabase) {
+      await supabase.from("keys").upsert(nextKey);
+    }
   }
 
   const menuItems = [
@@ -710,8 +928,8 @@ export default function App() {
         </div>
         <div className="placeholder">
           <ShieldCheck size={26}/>
-          <strong>端末ローカル保存中（試作版）</strong>
-          <p>データは開いている端末のブラウザ内に保存されます。PCとスマホなど複数端末で共有するにはSupabase連携が必要です。</p>
+          <strong>{supabase ? "Supabaseクラウド同期 有効" : "ローカル保存モード"}</strong>
+          <p>{supabase ? "予定・資料・鍵データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
         </div>
       </section>}
 
@@ -738,7 +956,6 @@ export default function App() {
             </label>)}
           </div>
         </div>)}
-        <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有にはSupabase連携が必要です。</p>
       </section>}
 
       {page === "admin-members" && <section className="page">
@@ -762,7 +979,6 @@ export default function App() {
             <button className="danger-outline member-toggle" onClick={()=>setMembers(prev=>prev.map(m=>m.id===member.id?{...m,active:!m.active}:m))}>{member.active ? "停止" : "再開"}</button>
           </div>)}
         </div>
-        <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有や招待メール送信はSupabase連携後に有効になります。</p>
       </section>}
 
       {page === "admin-structure" && <section className="page">
@@ -829,7 +1045,6 @@ export default function App() {
             }}>削除</button>
           </div>)}
         </div>
-        <p className="fine-print">※追加・変更した班は資料アップロード時の公開範囲にも自動反映されます。</p>
       </section>}
 
       {page === "keys" && <section className="page">
@@ -872,47 +1087,46 @@ export default function App() {
             </div>
             <div style={{display: "flex", gap: "6px"}} onClick={e=>e.stopPropagation()}>
               {k.status === "保管中" ? (
-                <button className="primary small" onClick={()=>{
+                <button className="primary small" onClick={async ()=>{
                   if (!window.confirm(`「${k.name}」の鍵を借りますか？`)) return;
                   const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                  setKeys(prev => prev.map(item => item.id === k.id ? {
-                    ...item,
+                  await updateKeyRecord({
+                    ...k,
                     status: "貸出中",
                     holder: "ログインユーザー",
                     location: "所持中",
-                    history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(item.history || [])]
-                  } : item));
+                    history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(k.history || [])]
+                  });
                 }}>借りる</button>
               ) : (
                 <>
-                  <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "white", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}} onClick={()=>{
+                  <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "white", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}} onClick={async ()=>{
                     if (!window.confirm(`「${k.name}」の鍵を引き継ぎますか？`)) return;
                     const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                    setKeys(prev => prev.map(item => item.id === k.id ? {
-                      ...item,
+                    await updateKeyRecord({
+                      ...k,
                       status: "貸出中",
                       holder: "ログインユーザー",
                       location: "所持中",
-                      history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(item.history || [])]
-                    } : item));
+                      history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(k.history || [])]
+                    });
                   }}>引き継ぐ</button>
-                  <button className="primary small" style={{background: "#2b6843"}} onClick={()=>{
+                  <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
                     if (!window.confirm(`「${k.name}」の鍵を返却しますか？`)) return;
                     const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                    setKeys(prev => prev.map(item => item.id === k.id ? {
-                      ...item,
+                    await updateKeyRecord({
+                      ...k,
                       status: "保管中",
                       holder: "-",
                       location: "雄飛室・鍵ボックス",
-                      history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(item.history || [])]
-                    } : item));
+                      history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(k.history || [])]
+                    });
                   }}>返す</button>
                 </>
               )}
             </div>
           </div>)}
         </div>
-        <p className="fine-print">※引き継ぎ時は操作した利用者が受取人となり、貸出中状態のまま所持者のみが更新されます。</p>
       </section>}
 
       {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && <section className="page">
@@ -1008,7 +1222,6 @@ export default function App() {
         setMemberForm({name:"",email:"",dept:"運営管理局",team:"",role:"委員"});setShowMemberForm(false);
         alert("登録しました。");
       }}>登録</button>
-      <p className="fine-print">※現在は開いている端末のブラウザ内に保存されます。複数端末での共有や招待メール送信はSupabase連携後に有効になります。</p>
     </div></div>}
 
     {showUpload && <div className="modal-backdrop" onClick={()=>setShowUpload(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1035,8 +1248,9 @@ export default function App() {
         </label>
       )}
       <label className="field-label">説明・備考（任意）<textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="資料についての説明"/></label>
-      <button className="primary full" disabled={!file} onClick={upload}>登録</button>
-      <p className="fine-print">※選択した公開範囲（局・班）に従って登録され、該当の局タブや全体公開に表示されます。</p>
+      <button className="primary full" disabled={!file || uploadingDoc} onClick={upload}>
+        {uploadingDoc ? "アップロード中..." : "登録"}
+      </button>
     </div></div>}
 
     {selected && <div className="modal-backdrop" onClick={()=>setSelected(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1057,7 +1271,6 @@ export default function App() {
       <h3 className="comments-title">コメント ({selected.comments.length})</h3>
       <div className="comments">{selected.comments.map((c,i)=><div className="comment" key={i}><p>{c}</p><small>ログインユーザー</small></div>)}</div>
       <div className="comment-entry"><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメントを入力"/><button className="primary" onClick={addComment} disabled={!comment.trim()}>送信</button></div>
-      <p className="fine-print">※コメント通知は資料のアップロード者のみに送信される設計です。</p>
     </div></div>}
 
     {showLentModal && <div className="modal-backdrop" onClick={()=>setShowLentModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -1122,26 +1335,26 @@ export default function App() {
       </div>
       <label className="field-label">鍵の名前<input value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="例：理科室前倉庫の鍵"/></label>
       <label className="field-label">保管場所<input value={newKeyLocation} onChange={e=>setNewKeyLocation(e.target.value)} placeholder="例：雄飛室・鍵ボックス"/></label>
-      <button className="primary full" disabled={!newKeyName.trim()} onClick={()=>{
+      <button className="primary full" disabled={!newKeyName.trim()} onClick={async ()=>{
         const name = newKeyName.trim();
         const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-        setKeys(prev => [
-          {
-            id: Date.now(),
-            name,
-            status: "保管中",
-            holder: "-",
-            location: newKeyLocation.trim() || "雄飛室・鍵ボックス",
-            history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
-          },
-          ...prev
-        ]);
+        const newKey = {
+          id: Date.now(),
+          name,
+          status: "保管中",
+          holder: "-",
+          location: newKeyLocation.trim() || "雄飛室・鍵ボックス",
+          history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
+        };
+        setKeys(prev => [newKey, ...prev]);
+        if (supabase) {
+          await supabase.from("keys").insert(newKey);
+        }
         setNewKeyName("");
         setNewKeyLocation("雄飛室・鍵ボックス");
         setShowKeyAddModal(false);
         alert("保存しました。");
       }}>登録</button>
-      <p className="fine-print">※登録した鍵は鍵一覧に即座に反映されます。</p>
     </div></div>}
   </div>;
 }
