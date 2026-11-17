@@ -5,7 +5,7 @@ import {
   Bell, MessageCircle, Download, FileText, Image, FileSpreadsheet,
   Presentation, Music, Video, ChevronLeft, X, UploadCloud, Trash2,
   Users, Building2, ShieldCheck, Settings, UserCog, Network, BellRing,
-  CalendarCog, ChevronRight, MapPin, Clock, Pencil, ExternalLink, CalendarPlus
+  CalendarCog, ChevronRight, ChevronDown, MapPin, Clock, Pencil, ExternalLink, CalendarPlus, Megaphone
 } from "lucide-react";
 
 const STORAGE_KEY = "yupei_mobile_state_v1";
@@ -18,9 +18,22 @@ const supabase =
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
+const CURRENT_USER_NAME = "ログインユーザー";
+
 const initialDepartments = [
   "運営管理局", "ステージPA局", "総務局", "渉外局",
   "情報局", "企画局", "警備局", "財務局"
+];
+
+const initialNotices = [
+  {
+    id: 1,
+    title: "資料共有・各種管理機能の運用開始について",
+    author: "委員長",
+    body: "YUPEI MOBILEにてカレンダー・お知らせ・資料共有・台車管理・鍵管理の運用を開始しました。各局・班での連絡や備品管理にご活用ください。",
+    targets: ["全体公開"],
+    createdAt: "2026-11-18T00:30:00"
+  }
 ];
 
 const initialDocs = [
@@ -156,7 +169,6 @@ function fileIcon(name) {
   return <FileText />;
 }
 
-// Googleカレンダー追加URL生成
 function buildGoogleCalendarUrl(ev) {
   const dateCompact = (ev.date || "").replace(/-/g, "");
   let datesParam = "";
@@ -194,7 +206,6 @@ function buildGoogleCalendarUrl(ev) {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-// iPhone純正カレンダー・Appleカレンダー用 .ics ダウンロード
 function downloadEventIcs(ev) {
   const escapeIcs = (str = "") =>
     String(str)
@@ -259,6 +270,28 @@ function downloadEventIcs(ev) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+function mapNoticeRow(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    author: row.author || CURRENT_USER_NAME,
+    body: row.body || "",
+    targets: Array.isArray(row.targets) && row.targets.length > 0 ? row.targets : ["全体公開"],
+    createdAt: row.created_at || new Date().toISOString()
+  };
+}
+
+function toNoticeRow(notice) {
+  return {
+    id: notice.id,
+    title: notice.title,
+    author: notice.author || CURRENT_USER_NAME,
+    body: notice.body || "",
+    targets: Array.isArray(notice.targets) && notice.targets.length > 0 ? notice.targets : ["全体公開"],
+    created_at: notice.createdAt
+  };
+}
+
 function mapEventRow(row) {
   return {
     id: row.id,
@@ -302,7 +335,7 @@ function mapDocRow(row) {
     targetTeam: row.target_team || "",
     note: row.note || "",
     updated: row.updated,
-    owner: row.owner || "ログインユーザー",
+    owner: row.owner || CURRENT_USER_NAME,
     comments: Array.isArray(row.comments) ? row.comments : [],
     storagePath,
     fileUrl: publicUrl
@@ -318,7 +351,7 @@ function toDocRow(doc) {
     target_team: doc.targetTeam || "",
     note: doc.note || "",
     updated: doc.updated,
-    owner: doc.owner || "ログインユーザー",
+    owner: doc.owner || CURRENT_USER_NAME,
     comments: Array.isArray(doc.comments) ? doc.comments : [],
     storage_path: doc.storagePath || ""
   };
@@ -367,6 +400,20 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  // お知らせ state
+  const [notices, setNotices] = useState(() =>
+    Array.isArray(saved?.notices) && saved.notices.length > 0
+      ? saved.notices
+      : initialNotices
+  );
+  const [showNoticeAddModal, setShowNoticeAddModal] = useState(false);
+  const [noticeForm, setNoticeForm] = useState({
+    title: "",
+    body: "",
+    targets: ["全体公開"]
+  });
+  const [expandedNoticeDepts, setExpandedNoticeDepts] = useState({});
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -492,12 +539,14 @@ export default function App() {
         { data: evRows, error: evErr },
         { data: docRows, error: docErr },
         { data: keyRows, error: keyErr },
-        { data: cartRows, error: cartErr }
+        { data: cartRows, error: cartErr },
+        { data: noticeRows, error: noticeErr }
       ] = await Promise.all([
         supabase.from("events").select("*").order("id", { ascending: true }),
         supabase.from("documents").select("*").order("updated", { ascending: false }),
         supabase.from("keys").select("*").order("id", { ascending: true }),
-        supabase.from("carts").select("*").order("id", { ascending: true })
+        supabase.from("carts").select("*").order("id", { ascending: true }),
+        supabase.from("notices").select("*").order("id", { ascending: false })
       ]);
 
       if (!active) return;
@@ -538,6 +587,14 @@ export default function App() {
           await supabase.from("carts").upsert(carts);
         }
       }
+
+      if (!noticeErr && Array.isArray(noticeRows)) {
+        if (noticeRows.length > 0) {
+          setNotices(noticeRows.map(mapNoticeRow));
+        } else {
+          await supabase.from("notices").upsert(notices.map(toNoticeRow));
+        }
+      }
     }
 
     syncFromSupabase();
@@ -553,6 +610,7 @@ export default function App() {
         STORAGE_KEY,
         JSON.stringify({
           docs: serializableDocs,
+          notices,
           events,
           keys,
           carts,
@@ -566,9 +624,15 @@ export default function App() {
     } catch {
       // 無視
     }
-  }, [docs, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
+  }, [docs, notices, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
 
-  // タブ一覧（"ALL"を除外し、必ずすべての種類タブの後に「すべて表示」が来るように保証）
+  const sortedNotices = useMemo(() => {
+    return [...notices].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [notices]);
+
+  const latestNotice = sortedNotices[0] || null;
+
+  // タブ一覧（必ずすべての種類タブの後に「すべて表示」が来るように保証）
   const allCartTabs = useMemo(() => {
     const base = cartCategories.map(normalizeCartCategoryName).filter(t => t && t !== "ALL");
     const fromCarts = carts
@@ -636,6 +700,71 @@ export default function App() {
     });
     return sorted.find(ev => ev.date >= todayKey) || sorted[0] || null;
   }, [events, todayKey]);
+
+  // お知らせ操作関数
+  function openNoticeAddModal() {
+    setNoticeForm({
+      title: "",
+      body: "",
+      targets: ["全体公開"]
+    });
+    setExpandedNoticeDepts({});
+    setShowNoticeAddModal(true);
+  }
+
+  function toggleNoticeTarget(targetValue) {
+    setNoticeForm(prev => {
+      const exists = prev.targets.includes(targetValue);
+      if (targetValue === "全体公開") {
+        return {
+          ...prev,
+          targets: exists ? prev.targets.filter(t => t !== "全体公開") : ["全体公開"]
+        };
+      }
+      const withoutAll = prev.targets.filter(t => t !== "全体公開");
+      const next = exists
+        ? withoutAll.filter(t => t !== targetValue)
+        : [...withoutAll, targetValue];
+      return {
+        ...prev,
+        targets: next
+      };
+    });
+  }
+
+  function toggleNoticeDeptExpand(dept) {
+    setExpandedNoticeDepts(prev => ({
+      ...prev,
+      [dept]: !prev[dept]
+    }));
+  }
+
+  async function saveNotice() {
+    if (!noticeForm.title.trim() || !noticeForm.body.trim()) return;
+    const resolvedTargets = noticeForm.targets.length > 0 ? noticeForm.targets : ["全体公開"];
+    const newNotice = {
+      id: Date.now(),
+      title: noticeForm.title.trim(),
+      author: CURRENT_USER_NAME,
+      body: noticeForm.body.trim(),
+      targets: resolvedTargets,
+      createdAt: new Date().toISOString()
+    };
+
+    setNotices(prev => [newNotice, ...prev]);
+    if (supabase) {
+      await supabase.from("notices").insert(toNoticeRow(newNotice));
+    }
+    setShowNoticeAddModal(false);
+  }
+
+  async function deleteNotice(id) {
+    if (!window.confirm("このお知らせを削除しますか？")) return;
+    setNotices(prev => prev.filter(n => n.id !== id));
+    if (supabase) {
+      await supabase.from("notices").delete().eq("id", id);
+    }
+  }
 
   function openNewEventModal(dateStr = selectedDate) {
     setEditingEventId(null);
@@ -764,7 +893,7 @@ export default function App() {
         targetTeam: resolvedTeam,
         note,
         updated: now,
-        owner: "ログインユーザー",
+        owner: CURRENT_USER_NAME,
         comments: []
       };
 
@@ -885,7 +1014,7 @@ export default function App() {
       name: trimmedName,
       location: selectedKeyDetail.status === "保管中" ? trimmedLocation : selectedKeyDetail.location,
       history: [
-        { time: nowStr, action: `情報編集（${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
+        { time: nowStr, action: `情報編集（${trimmedName} / ${trimmedLocation}）`, user: CURRENT_USER_NAME },
         ...(selectedKeyDetail.history || [])
       ]
     };
@@ -947,6 +1076,38 @@ export default function App() {
     }
   }
 
+  // タブの削除
+  async function deleteCartTab(tabName) {
+    if (!tabName || tabName === "ALL") return;
+    const belongingCarts = carts.filter(
+      c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) === tabName
+    );
+
+    if (belongingCarts.length > 0) {
+      const deleteWithCarts = window.confirm(
+        `タブ「${tabName}」には ${belongingCarts.length}台 の台車が登録されています。\nタブと一緒に中の台車も削除しますか？\n（台車を残したい場合は「キャンセル」を押して、先に台車の種類を変更してください）`
+      );
+      if (!deleteWithCarts) return;
+
+      const remainingCarts = carts.filter(
+        c => normalizeCartCategoryName(c.category || inferCartCategory(c.name)) !== tabName
+      );
+      setCarts(remainingCarts);
+      setCartCategories(prev => prev.filter(t => normalizeCartCategoryName(t) !== tabName));
+      setActiveCartTab(null);
+
+      if (supabase) {
+        const idsToDelete = belongingCarts.map(c => c.id);
+        await supabase.from("carts").delete().in("id", idsToDelete);
+      }
+      return;
+    }
+
+    if (!window.confirm(`タブ「${tabName}」を削除しますか？`)) return;
+    setCartCategories(prev => prev.filter(t => normalizeCartCategoryName(t) !== tabName));
+    setActiveCartTab(null);
+  }
+
   function openCartDetailModal(cartObj) {
     setSelectedCartDetail(cartObj);
     setCartEditForm({
@@ -975,7 +1136,7 @@ export default function App() {
       name: trimmedName,
       location: selectedCartDetail.status === "保管中" ? trimmedLocation : selectedCartDetail.location,
       history: [
-        { time: nowStr, action: `情報編集（${resolvedCat} / ${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
+        { time: nowStr, action: `情報編集（${resolvedCat} / ${trimmedName} / ${trimmedLocation}）`, user: CURRENT_USER_NAME },
         ...(selectedCartDetail.history || [])
       ]
     };
@@ -994,11 +1155,13 @@ export default function App() {
     setShowCartAddModal(true);
   }
 
+  // 上段：カレンダー・お知らせ／下段：資料共有・台車管理・鍵管理…
   const menuItems = [
     [CalendarDays, "カレンダー", "calendar"],
-    [KeyRound, "鍵管理", "keys"],
+    [Megaphone, "お知らせ", "notices"],
     [FolderOpen, "資料共有", "documents"],
-    [Truck, "台車管理", "carts"]
+    [Truck, "台車管理", "carts"],
+    [KeyRound, "鍵管理", "keys"]
   ];
 
   const availableTeamsForScope = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
@@ -1018,7 +1181,7 @@ export default function App() {
           <div className="brand-sub">雄飛祭実行委員会</div>
         </div>
       </button>
-      <button className="icon-button top-bell" aria-label="通知"><Bell size={20}/></button>
+      <button className="icon-button top-bell" aria-label="お知らせ" onClick={()=>setPage("notices")}><Bell size={20}/></button>
     </header>
 
     <main>
@@ -1033,14 +1196,103 @@ export default function App() {
               : "次回の予定日時・場所が表示されます。"}
           </p>
         </div>
-        <div className="section-heading"><h3>最新のお知らせ</h3><span className="muted">一覧を表示 →</span></div>
-        <div className="notice-card"><strong>資料共有のテスト運用について</strong><p>新しい資料共有画面の動作確認を実施中です。</p><small>サンプル通知</small></div>
+
+        <div className="section-heading">
+          <h3>最新のお知らせ</h3>
+          <button
+            type="button"
+            className="muted"
+            onClick={()=>setPage("notices")}
+            style={{background: "none", border: "none", padding: 0, cursor: "pointer", font: "inherit", fontWeight: 700}}
+          >
+            一覧を表示 →
+          </button>
+        </div>
+
+        {latestNotice ? (
+          <div className="notice-card" style={{cursor: "pointer"}} onClick={()=>setPage("notices")}>
+            <div style={{display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px"}}>
+              <strong>{latestNotice.title}</strong>
+              <span style={{fontSize: "11px", color: "#203d64", fontWeight: 700, background: "#eef3f9", padding: "2px 8px", borderRadius: "999px", flexShrink: 0}}>
+                {latestNotice.targets.join(" / ")}
+              </span>
+            </div>
+            <p style={{margin: "6px 0"}}>{latestNotice.body}</p>
+            <small>
+              {latestNotice.author} ・ {new Date(latestNotice.createdAt).toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"})}
+            </small>
+          </div>
+        ) : (
+          <div className="notice-card" style={{cursor: "pointer"}} onClick={()=>setPage("notices")}>
+            <strong>お知らせはまだありません</strong>
+            <p>「一覧を表示 →」またはメニューの「お知らせ」から作成できます。</p>
+          </div>
+        )}
+
         <h3 className="menu-title">メニュー</h3>
         <div className="menu-grid">
           {menuItems.map(([Icon,label,key]) => <button className="menu-tile" key={key} onClick={()=>setPage(key)}><Icon/><span>{label}</span></button>)}
           <button className="menu-tile" onClick={()=>setPage("lost")}><Search/><span>落とし物</span></button>
           <button className="menu-tile" onClick={()=>setPage("inquiry")}><MessageCircle/><span>問い合わせ</span></button>
           <button className="menu-tile" onClick={()=>setPage("admin")}><Settings/><span>管理者設定</span></button>
+        </div>
+      </section>}
+
+      {/* お知らせ一覧画面 */}
+      {page === "notices" && <section className="page">
+        <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
+        <p className="eyebrow">ANNOUNCEMENTS</p>
+        <div className="list-heading" style={{marginBottom: "10px"}}>
+          <div>
+            <h1 style={{marginBottom: "2px"}}>お知らせ</h1>
+            <p className="muted" style={{margin: 0}}>委員会全体・各局・各班への連絡事項を確認します。</p>
+          </div>
+          <button className="primary small" onClick={openNoticeAddModal}>
+            <Plus size={16}/> 追加
+          </button>
+        </div>
+
+        <div className="file-list">
+          {sortedNotices.length === 0 ? (
+            <div className="empty">お知らせはまだ登録されていません。右上の「＋ 追加」から作成できます。</div>
+          ) : (
+            sortedNotices.map(notice => (
+              <div className="notice-card" key={notice.id} style={{marginBottom: "10px"}}>
+                <div style={{display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px"}}>
+                  <strong style={{fontSize: "15px"}}>{notice.title}</strong>
+                  <button
+                    type="button"
+                    className="danger-outline small"
+                    aria-label="お知らせを削除"
+                    onClick={()=>deleteNotice(notice.id)}
+                  >
+                    <Trash2 size={14}/>
+                  </button>
+                </div>
+                <div style={{display: "flex", flexWrap: "wrap", gap: "4px", marginTop: "6px"}}>
+                  {notice.targets.map(t => (
+                    <span
+                      key={t}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: "#203d64",
+                        background: "#eef3f9",
+                        padding: "2px 8px",
+                        borderRadius: "999px"
+                      }}
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                <p style={{margin: "8px 0", whiteSpace: "pre-wrap", lineHeight: 1.55}}>{notice.body}</p>
+                <small>
+                  作成者: {notice.author} ・ {new Date(notice.createdAt).toLocaleString("ja-JP", {year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"})}
+                </small>
+              </div>
+            ))
+          )}
         </div>
       </section>}
 
@@ -1210,7 +1462,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* 外部カレンダー連携ボタン（Googleカレンダー / iPhone純正カレンダー） */}
                 <div style={{display: "flex", flexWrap: "wrap", gap: "6px", paddingTop: "8px", borderTop: "1px solid #eef2f6"}}>
                   <a
                     href={buildGoogleCalendarUrl(ev)}
@@ -1342,7 +1593,7 @@ export default function App() {
         <div className="placeholder">
           <ShieldCheck size={26}/>
           <strong>{supabase ? "Supabaseクラウド同期 有効" : "ローカル保存モード"}</strong>
-          <p>{supabase ? "予定・資料・鍵・台車データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
+          <p>{supabase ? "お知らせ・予定・資料・鍵・台車データはSupabaseに保存され、複数端末で共有されます。" : "環境変数が未設定のためローカル保存で動作しています。"}</p>
         </div>
       </section>}
 
@@ -1506,9 +1757,9 @@ export default function App() {
                   await updateKeyRecord({
                     ...k,
                     status: "貸出中",
-                    holder: "ログインユーザー",
+                    holder: CURRENT_USER_NAME,
                     location: "所持中",
-                    history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(k.history || [])]
+                    history: [{time: nowStr, action: "借りる", user: CURRENT_USER_NAME}, ...(k.history || [])]
                   });
                 }}>借りる</button>
               ) : (
@@ -1519,9 +1770,9 @@ export default function App() {
                     await updateKeyRecord({
                       ...k,
                       status: "貸出中",
-                      holder: "ログインユーザー",
+                      holder: CURRENT_USER_NAME,
                       location: "所持中",
-                      history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(k.history || [])]
+                      history: [{time: nowStr, action: "引き継ぐ", user: CURRENT_USER_NAME}, ...(k.history || [])]
                     });
                   }}>引き継ぐ</button>
                   <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
@@ -1532,7 +1783,7 @@ export default function App() {
                       status: "保管中",
                       holder: "-",
                       location: "雄飛室・鍵ボックス",
-                      history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(k.history || [])]
+                      history: [{time: nowStr, action: "返す", user: CURRENT_USER_NAME}, ...(k.history || [])]
                     });
                   }}>返す</button>
                 </>
@@ -1566,16 +1817,26 @@ export default function App() {
             <h2>台車一覧</h2>
             <small>{activeCartTab ? `${activeCartTab === "ALL" ? "すべて" : activeCartTab}（${filteredCarts.length}台）` : "タブを押して開く"}</small>
           </div>
-          <div style={{display: "flex", gap: "6px"}}>
+          <div style={{display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end"}}>
             {activeCartTab && activeCartTab !== "ALL" && (
-              <button
-                type="button"
-                className="secondary small"
-                style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
-                onClick={()=>renameCartTab(activeCartTab)}
-              >
-                <Pencil size={13}/> タブ名を編集
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="secondary small"
+                  style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "8px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
+                  onClick={()=>renameCartTab(activeCartTab)}
+                >
+                  <Pencil size={13}/> タブ名を編集
+                </button>
+                <button
+                  type="button"
+                  className="danger-outline small"
+                  style={{borderRadius: "8px", padding: "8px 10px", fontSize: "12px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px"}}
+                  onClick={()=>deleteCartTab(activeCartTab)}
+                >
+                  <Trash2 size={13}/> タブを削除
+                </button>
+              </>
             )}
             <button className="primary small" onClick={openCartAddModal}><Plus size={16}/> 追加</button>
           </div>
@@ -1672,8 +1933,8 @@ export default function App() {
                       await updateCartRecord({
                         ...c,
                         status: "貸出中",
-                        holder: "ログインユーザー",
-                        history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(c.history || [])]
+                        holder: CURRENT_USER_NAME,
+                        history: [{time: nowStr, action: "借りる", user: CURRENT_USER_NAME}, ...(c.history || [])]
                       });
                     }}>借りる</button>
                   ) : (
@@ -1684,8 +1945,8 @@ export default function App() {
                         await updateCartRecord({
                           ...c,
                           status: "貸出中",
-                          holder: "ログインユーザー",
-                          history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(c.history || [])]
+                          holder: CURRENT_USER_NAME,
+                          history: [{time: nowStr, action: "引き継ぐ", user: CURRENT_USER_NAME}, ...(c.history || [])]
                         });
                       }}>引き継ぐ</button>
                       <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
@@ -1698,7 +1959,7 @@ export default function App() {
                           status: "保管中",
                           holder: "-",
                           location: defaultReturnLocation,
-                          history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(c.history || [])]
+                          history: [{time: nowStr, action: "返す", user: CURRENT_USER_NAME}, ...(c.history || [])]
                         });
                       }}>返す</button>
                     </>
@@ -1710,12 +1971,135 @@ export default function App() {
         )}
       </section>}
 
-      {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && page !== "carts" && <section className="page">
+      {page !== "home" && page !== "notices" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && page !== "carts" && <section className="page">
         <button className="back-link" onClick={()=>setPage("home")}><ChevronLeft size={17}/> ホーム</button>
         <p className="eyebrow">YUPEI MOBILE</p><h1>{{lost:"落とし物",inquiry:"問い合わせ"}[page] || "機能"}</h1>
         <div className="placeholder"><ShieldCheck size={28}/><strong>未実装</strong><p>この機能は未実装です。</p></div>
       </section>}
     </main>
+
+    {/* お知らせ新規作成モーダル */}
+    {showNoticeAddModal && <div className="modal-backdrop" onClick={()=>setShowNoticeAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxHeight: "88vh", overflowY: "auto"}}>
+      <div className="modal-head">
+        <h2>お知らせを作成</h2>
+        <button className="icon-button" onClick={()=>setShowNoticeAddModal(false)}><X/></button>
+      </div>
+
+      <label className="field-label">タイトル
+        <input
+          value={noticeForm.title}
+          onChange={e=>setNoticeForm(v=>({...v, title: e.target.value}))}
+          placeholder="例：前日準備の集合時間について"
+        />
+      </label>
+
+      <label className="field-label">作成者（自動反映）
+        <input
+          value={CURRENT_USER_NAME}
+          readOnly
+          style={{background: "#f1f5f9", color: "#475569"}}
+        />
+      </label>
+
+      <label className="field-label">本文
+        <textarea
+          rows={4}
+          value={noticeForm.body}
+          onChange={e=>setNoticeForm(v=>({...v, body: e.target.value}))}
+          placeholder="お知らせの内容を入力してください"
+        />
+      </label>
+
+      <div className="field-label" style={{marginTop: "12px"}}>
+        <span>公開設定（複数選択可）</span>
+        <div style={{border: "1px solid #dfe5ec", borderRadius: "10px", padding: "8px", marginTop: "6px", background: "#f8fafc"}}>
+          {/* 全体公開チェックボックス */}
+          <label style={{display: "flex", alignItems: "center", gap: "8px", padding: "6px 4px", fontWeight: 700, cursor: "pointer"}}>
+            <input
+              type="checkbox"
+              checked={noticeForm.targets.includes("全体公開")}
+              onChange={()=>toggleNoticeTarget("全体公開")}
+            />
+            <span>全体公開</span>
+          </label>
+
+          {/* 局ごとの表示（班がある局はタップで展開） */}
+          {departments.map(dept => {
+            const teams = teamsByDepartment[dept] || [];
+            const hasTeams = teams.length > 0;
+            const isExpanded = !!expandedNoticeDepts[dept];
+            const isDeptChecked = noticeForm.targets.includes(dept);
+
+            return (
+              <div key={dept} style={{borderTop: "1px solid #e2e8f0", paddingTop: "4px", marginTop: "4px"}}>
+                <div style={{display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px"}}>
+                  <label style={{display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", flex: 1}}>
+                    <input
+                      type="checkbox"
+                      checked={isDeptChecked}
+                      onChange={()=>toggleNoticeTarget(dept)}
+                    />
+                    <span style={{fontWeight: 600}}>{dept}</span>
+                  </label>
+                  {hasTeams && (
+                    <button
+                      type="button"
+                      onClick={()=>toggleNoticeDeptExpand(dept)}
+                      style={{
+                        border: "1px solid #cbd5e1",
+                        background: "#ffffff",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: "#334155",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "3px"
+                      }}
+                    >
+                      {isExpanded ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}
+                      班を選択 ({teams.length})
+                    </button>
+                  )}
+                </div>
+
+                {hasTeams && isExpanded && (
+                  <div style={{paddingLeft: "26px", paddingBottom: "6px", display: "flex", flexDirection: "column", gap: "4px"}}>
+                    {teams.map(team => {
+                      const teamTarget = `${dept}（${team}）`;
+                      return (
+                        <label key={team} style={{display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer", padding: "2px 0"}}>
+                          <input
+                            type="checkbox"
+                            checked={noticeForm.targets.includes(teamTarget)}
+                            onChange={()=>toggleNoticeTarget(teamTarget)}
+                          />
+                          <span>{team}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <small style={{display: "block", marginTop: "6px", color: "#475569"}}>
+          選択中の公開先: {noticeForm.targets.length > 0 ? noticeForm.targets.join("、") : "未選択（登録時は全体公開になります）"}
+        </small>
+      </div>
+
+      <button
+        className="primary full"
+        style={{marginTop: "14px"}}
+        disabled={!noticeForm.title.trim() || !noticeForm.body.trim()}
+        onClick={saveNotice}
+      >
+        投稿する
+      </button>
+    </div></div>}
 
     {showEventModal && <div className="modal-backdrop" onClick={()=>{setShowEventModal(false);setEditingEventId(null);}}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
@@ -1850,7 +2234,7 @@ export default function App() {
         <button className="danger-outline" onClick={()=>removeDoc(selected.id)}><Trash2 size={17}/> 削除</button>
       </div>
       <h3 className="comments-title">コメント ({selected.comments.length})</h3>
-      <div className="comments">{selected.comments.map((c,i)=><div className="comment" key={i}><p>{c}</p><small>ログインユーザー</small></div>)}</div>
+      <div className="comments">{selected.comments.map((c,i)=><div className="comment" key={i}><p>{c}</p><small>{CURRENT_USER_NAME}</small></div>)}</div>
       <div className="comment-entry"><input value={comment} onChange={e=>setComment(e.target.value)} placeholder="コメントを入力"/><button className="primary" onClick={addComment} disabled={!comment.trim()}>送信</button></div>
     </div></div>}
 
@@ -1988,7 +2372,7 @@ export default function App() {
           status: "保管中",
           holder: "-",
           location: newKeyLocation.trim() || "雄飛室・鍵ボックス",
-          history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
+          history: [{time: nowStr, action: "登録", user: CURRENT_USER_NAME}]
         };
         setKeys(prev => [newKey, ...prev]);
         if (supabase) {
@@ -2212,7 +2596,7 @@ export default function App() {
                 status: "保管中",
                 holder: "-",
                 location: newCartLocation.trim() || defaultLocationForCategory(cat),
-                history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
+                history: [{time: nowStr, action: "登録", user: CURRENT_USER_NAME}]
               };
               setCarts(prev => [newCart, ...prev]);
               if (supabase) {
