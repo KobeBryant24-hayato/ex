@@ -54,28 +54,35 @@ const initialKeys = [
   { id: 22, name: "4棟 301", status: "保管中", holder: "-", location: "雄飛室・鍵ボックス", history: [] }
 ];
 
+const initialCartCategories = [
+  "雄飛台車",
+  "学友会台車",
+  "かご台車",
+  "ダスキン台車"
+];
+
 const initialCarts = [
-  { id: 1, name: "雄飛台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 2, name: "雄飛台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 3, name: "雄飛台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 4, name: "学友会台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 5, name: "学友会台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 6, name: "学友会台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 7, name: "学友会台車 4", status: "保管中", holder: "-", location: "雄飛室", history: [] },
-  { id: 8, name: "かご台車 あいんつ（5）", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
-  { id: 9, name: "かご台車 つゔぁい", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
-  { id: 10, name: "ダスキン台車 11", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 11, name: "ダスキン台車 12", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 12, name: "ダスキン台車 13", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 13, name: "ダスキン台車 14", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 14, name: "ダスキン台車 15", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 15, name: "ダスキン台車 16", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 16, name: "ダスキン台車 17", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 17, name: "ダスキン台車 18", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 18, name: "ダスキン台車 19", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 19, name: "ダスキン台車 20", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 20, name: "ダスキン台車 21", status: "保管中", holder: "-", location: "4棟前", history: [] },
-  { id: 21, name: "ダスキン台車 22", status: "保管中", holder: "-", location: "4棟前", history: [] }
+  { id: 1, category: "雄飛台車", name: "雄飛台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 2, category: "雄飛台車", name: "雄飛台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 3, category: "雄飛台車", name: "雄飛台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 4, category: "学友会台車", name: "学友会台車 1", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 5, category: "学友会台車", name: "学友会台車 2", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 6, category: "学友会台車", name: "学友会台車 3", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 7, category: "学友会台車", name: "学友会台車 4", status: "保管中", holder: "-", location: "雄飛室", history: [] },
+  { id: 8, category: "かご台車", name: "かご台車 あいんつ（5）", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
+  { id: 9, category: "かご台車", name: "かご台車 つゔぁい", status: "保管中", holder: "-", location: "学セン階段下", history: [] },
+  { id: 10, category: "ダスキン台車", name: "ダスキン台車 11", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 11, category: "ダスキン台車", name: "ダスキン台車 12", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 12, category: "ダスキン台車", name: "ダスキン台車 13", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 13, category: "ダスキン台車", name: "ダスキン台車 14", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 14, category: "ダスキン台車", name: "ダスキン台車 15", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 15, category: "ダスキン台車", name: "ダスキン台車 16", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 16, category: "ダスキン台車", name: "ダスキン台車 17", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 17, category: "ダスキン台車", name: "ダスキン台車 18", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 18, category: "ダスキン台車", name: "ダスキン台車 19", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 19, category: "ダスキン台車", name: "ダスキン台車 20", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 20, category: "ダスキン台車", name: "ダスキン台車 21", status: "保管中", holder: "-", location: "4棟前", history: [] },
+  { id: 21, category: "ダスキン台車", name: "ダスキン台車 22", status: "保管中", holder: "-", location: "4棟前", history: [] }
 ];
 
 const initialTeamsByDepartment = {
@@ -104,6 +111,14 @@ const initialPermissions = {
   "委員": {viewAll:false,editAll:false,emergency:false,manageMembers:false,manageOrg:false},
   "事務課": {viewAll:true,editAll:true,emergency:true,manageMembers:true,manageOrg:true}
 };
+
+function inferCartCategory(name = "") {
+  if (name.includes("雄飛")) return "雄飛台車";
+  if (name.includes("学友")) return "学友会台車";
+  if (name.includes("かご") || name.includes("あいんつ") || name.includes("つゔぁい")) return "かご台車";
+  if (name.includes("ダスキン")) return "ダスキン台車";
+  return "その他";
+}
 
 function loadSavedState() {
   try {
@@ -213,8 +228,13 @@ function mapKeyRow(row) {
 }
 
 function mapCartRow(row) {
+  const resolvedCategory =
+    row.category && row.category !== "その他"
+      ? row.category
+      : inferCartCategory(row.name || "");
   return {
     id: row.id,
+    category: resolvedCategory,
     name: row.name,
     status: row.status || "保管中",
     holder: row.holder || "-",
@@ -294,15 +314,28 @@ export default function App() {
   const [newKeyLocation, setNewKeyLocation] = useState("雄飛室・鍵ボックス");
 
   // 台車管理 state
-  const [carts, setCarts] = useState(() => Array.isArray(saved?.carts) ? saved.carts : initialCarts);
+  const [cartCategories, setCartCategories] = useState(() =>
+    Array.isArray(saved?.cartCategories) && saved.cartCategories.length > 0
+      ? saved.cartCategories
+      : initialCartCategories
+  );
+  const [activeCartTab, setActiveCartTab] = useState(null);
+  const [carts, setCarts] = useState(() =>
+    Array.isArray(saved?.carts)
+      ? saved.carts.map(c => ({ ...c, category: c.category || inferCartCategory(c.name) }))
+      : initialCarts
+  );
   const [showCartLentModal, setShowCartLentModal] = useState(false);
   const [selectedCartDetail, setSelectedCartDetail] = useState(null);
   const [isEditingCart, setIsEditingCart] = useState(false);
-  const [cartEditForm, setCartEditForm] = useState({ name: "", location: "" });
+  const [cartEditForm, setCartEditForm] = useState({ category: "雄飛台車", name: "", location: "" });
   const [cartSearch, setCartSearch] = useState("");
   const [showCartAddModal, setShowCartAddModal] = useState(false);
+  const [addModalMode, setAddModalMode] = useState("cart"); // "cart" | "tab"
+  const [newCartCategory, setNewCartCategory] = useState("雄飛台車");
   const [newCartName, setNewCartName] = useState("");
   const [newCartLocation, setNewCartLocation] = useState("雄飛室");
+  const [newTabName, setNewTabName] = useState("");
 
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState(null);
@@ -383,7 +416,10 @@ export default function App() {
 
       if (!cartErr && Array.isArray(cartRows)) {
         if (cartRows.length > 0) {
-          setCarts(cartRows.map(mapCartRow));
+          const mapped = cartRows.map(mapCartRow);
+          setCarts(mapped);
+          const extraCats = mapped.map(c => c.category).filter(Boolean);
+          setCartCategories(prev => Array.from(new Set([...prev, ...extraCats])));
         } else {
           await supabase.from("carts").upsert(carts);
         }
@@ -406,6 +442,7 @@ export default function App() {
           events,
           keys,
           carts,
+          cartCategories,
           departments,
           teamsByDepartment,
           members,
@@ -415,7 +452,21 @@ export default function App() {
     } catch {
       // 無視
     }
-  }, [docs, events, keys, carts, departments, teamsByDepartment, members, permissions]);
+  }, [docs, events, keys, carts, cartCategories, departments, teamsByDepartment, members, permissions]);
+
+  const allCartTabs = useMemo(() => {
+    const fromCarts = carts.map(c => c.category || inferCartCategory(c.name));
+    return Array.from(new Set([...cartCategories, ...fromCarts]));
+  }, [cartCategories, carts]);
+
+  const filteredCarts = useMemo(() => {
+    return carts.filter(c => {
+      const cat = c.category || inferCartCategory(c.name);
+      const matchesTab = activeCartTab === "ALL" ? true : cat === activeCartTab;
+      const matchesSearch = c.name.toLowerCase().includes(cartSearch.toLowerCase());
+      return matchesTab && matchesSearch;
+    });
+  }, [carts, activeCartTab, cartSearch]);
 
   const visibleDocs = useMemo(() => docs
     .filter(d => {
@@ -726,6 +777,12 @@ export default function App() {
   }
 
   // 台車操作ヘルパー
+  function defaultLocationForCategory(cat) {
+    if (cat === "ダスキン台車") return "4棟前";
+    if (cat === "かご台車") return "学セン階段下";
+    return "雄飛室";
+  }
+
   async function updateCartRecord(nextCart) {
     setCarts(prev => prev.map(item => item.id === nextCart.id ? nextCart : item));
     if (selectedCartDetail?.id === nextCart.id) {
@@ -739,6 +796,7 @@ export default function App() {
   function openCartDetailModal(cartObj) {
     setSelectedCartDetail(cartObj);
     setCartEditForm({
+      category: cartObj.category || inferCartCategory(cartObj.name),
       name: cartObj.name || "",
       location: cartObj.location || ""
     });
@@ -753,21 +811,33 @@ export default function App() {
   async function saveCartInfo() {
     if (!selectedCartDetail || !cartEditForm.name.trim()) return;
     const trimmedName = cartEditForm.name.trim();
-    const trimmedLocation = cartEditForm.location.trim() || "雄飛室";
+    const resolvedCat = cartEditForm.category || "雄飛台車";
+    const trimmedLocation = cartEditForm.location.trim() || defaultLocationForCategory(resolvedCat);
     const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
 
     const updatedCart = {
       ...selectedCartDetail,
+      category: resolvedCat,
       name: trimmedName,
       location: selectedCartDetail.status === "保管中" ? trimmedLocation : selectedCartDetail.location,
       history: [
-        { time: nowStr, action: `情報編集（${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
+        { time: nowStr, action: `情報編集（${resolvedCat} / ${trimmedName} / ${trimmedLocation}）`, user: "ログインユーザー" },
         ...(selectedCartDetail.history || [])
       ]
     };
 
     await updateCartRecord(updatedCart);
     setIsEditingCart(false);
+  }
+
+  function openCartAddModal() {
+    const defaultCat = activeCartTab && activeCartTab !== "ALL" ? activeCartTab : (allCartTabs[0] || "雄飛台車");
+    setAddModalMode("cart");
+    setNewCartCategory(defaultCat);
+    setNewCartName("");
+    setNewCartLocation(defaultLocationForCategory(defaultCat));
+    setNewTabName("");
+    setShowCartAddModal(true);
   }
 
   const menuItems = [
@@ -1290,72 +1360,143 @@ export default function App() {
             <strong style={{fontSize: "24px", color: "#a34343"}}>{carts.filter(c => c.status === "貸出中").length}<span style={{fontSize: "12px", marginLeft: "2px"}}>台</span></strong>
           </div>
         </div>
-        <p className="muted">台車の保管・貸出状況の確認、および借受・返却・引き継ぎを行います。</p>
+        <p className="muted">種類別のタブを押すと、対象の台車一覧が開きます。</p>
 
         <div className="list-heading">
-          <div><h2>台車一覧</h2><small>{carts.filter(c => c.name.toLowerCase().includes(cartSearch.toLowerCase())).length}台の台車</small></div>
-          <button className="primary small" onClick={()=>setShowCartAddModal(true)}><Plus size={16}/> 台車を追加</button>
+          <div>
+            <h2>台車一覧</h2>
+            <small>{activeCartTab ? `${activeCartTab === "ALL" ? "すべて" : activeCartTab}（${filteredCarts.length}台）` : "タブを押して開く"}</small>
+          </div>
+          <button className="primary small" onClick={openCartAddModal}><Plus size={16}/> 追加</button>
         </div>
-        <div className="searchbox"><Search size={18}/><input value={cartSearch} onChange={e=>setCartSearch(e.target.value)} placeholder="台車の名前・番号で検索（例：雄飛台車、ダスキン、あいんつ）"/></div>
 
-        <div className="file-list">
-          {carts.filter(c => c.name.toLowerCase().includes(cartSearch.toLowerCase())).map(c => <div className="file-row" key={c.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>openCartDetailModal(c)}>
-            <div className="file-icon"><Truck/></div>
-            <div className="file-info">
-              <strong>{c.name}</strong>
-              <small>状態: <span style={{color: c.status === "保管中" ? "#2b6843" : "#a34343", fontWeight: 700}}>{c.status}</span></small>
-              <small>{c.status === "貸出中" ? `使用者: ${c.holder}` : `保管場所: ${c.location}`}</small>
-              <small style={{color: "#666", marginTop: "2px"}}>
-                {c.history && c.history.length > 0
-                  ? `最終操作: ${c.history[0].time} ${c.history[0].action}`
-                  : "履歴なし（初期状態）"}
-              </small>
-            </div>
-            <div style={{display: "flex", gap: "6px"}} onClick={e=>e.stopPropagation()}>
-              {c.status === "保管中" ? (
-                <button className="primary small" onClick={async ()=>{
-                  if (!window.confirm(`「${c.name}」の台車を借りますか？`)) return;
-                  const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                  await updateCartRecord({
-                    ...c,
-                    status: "貸出中",
-                    holder: "ログインユーザー",
-                    history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(c.history || [])]
-                  });
-                }}>借りる</button>
-              ) : (
-                <>
-                  <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "white", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}} onClick={async ()=>{
-                    if (!window.confirm(`「${c.name}」の台車を引き継ぎますか？`)) return;
-                    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                    await updateCartRecord({
-                      ...c,
-                      status: "貸出中",
-                      holder: "ログインユーザー",
-                      history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(c.history || [])]
-                    });
-                  }}>引き継ぐ</button>
-                  <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
-                    if (!window.confirm(`「${c.name}」の台車を返却しますか？`)) return;
-                    const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-                    const defaultReturnLocation = c.name.includes("ダスキン")
-                      ? "4棟前"
-                      : c.name.includes("かご台車") || c.name.includes("あいんつ") || c.name.includes("つゔぁい")
-                        ? "学セン階段下"
-                        : c.location || "雄飛室";
-                    await updateCartRecord({
-                      ...c,
-                      status: "保管中",
-                      holder: "-",
-                      location: defaultReturnLocation,
-                      history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(c.history || [])]
-                    });
-                  }}>返す</button>
-                </>
-              )}
-            </div>
-          </div>)}
+        {/* 種類別タブ（押すと開く／もう一度押すと閉じる） */}
+        <div style={{display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px"}}>
+          {allCartTabs.map(tab => {
+            const count = carts.filter(c => (c.category || inferCartCategory(c.name)) === tab).length;
+            const lentCount = carts.filter(c => (c.category || inferCartCategory(c.name)) === tab && c.status === "貸出中").length;
+            const isOpen = activeCartTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setActiveCartTab(prev => prev === tab ? null : tab);
+                  setCartSearch("");
+                }}
+                style={{
+                  border: isOpen ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+                  background: isOpen ? "#203d64" : "#ffffff",
+                  color: isOpen ? "#ffffff" : "#1e293b",
+                  borderRadius: "10px",
+                  padding: "9px 12px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px"
+                }}
+              >
+                <span>{tab}</span>
+                <span style={{
+                  fontSize: "11px",
+                  padding: "1px 6px",
+                  borderRadius: "999px",
+                  background: isOpen ? "rgba(255,255,255,0.2)" : "#f1f5f9",
+                  color: isOpen ? "#ffffff" : "#475569"
+                }}>
+                  {count}台{lentCount > 0 ? `・貸出${lentCount}` : ""}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCartTab(prev => prev === "ALL" ? null : "ALL");
+              setCartSearch("");
+            }}
+            style={{
+              border: activeCartTab === "ALL" ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+              background: activeCartTab === "ALL" ? "#203d64" : "#f8fafc",
+              color: activeCartTab === "ALL" ? "#ffffff" : "#475569",
+              borderRadius: "10px",
+              padding: "9px 12px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+          >
+            すべて表示（{carts.length}台）
+          </button>
         </div>
+
+        {activeCartTab === null ? (
+          <div className="empty">上の種類別タブをタップすると、台車の一覧が表示されます。</div>
+        ) : (
+          <>
+            <div className="searchbox"><Search size={18}/><input value={cartSearch} onChange={e=>setCartSearch(e.target.value)} placeholder={`${activeCartTab === "ALL" ? "台車" : activeCartTab}の中で検索`}/></div>
+
+            <div className="file-list">
+              {filteredCarts.length === 0 ? (
+                <div className="empty">このタブにはまだ台車が登録されていません。「＋ 追加」から台車を追加できます。</div>
+              ) : filteredCarts.map(c => <div className="file-row" key={c.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>openCartDetailModal(c)}>
+                <div className="file-icon"><Truck/></div>
+                <div className="file-info">
+                  <strong>{c.name}</strong>
+                  <small>種類: {c.category || inferCartCategory(c.name)} ・ 状態: <span style={{color: c.status === "保管中" ? "#2b6843" : "#a34343", fontWeight: 700}}>{c.status}</span></small>
+                  <small>{c.status === "貸出中" ? `使用者: ${c.holder}` : `保管場所: ${c.location}`}</small>
+                  <small style={{color: "#666", marginTop: "2px"}}>
+                    {c.history && c.history.length > 0
+                      ? `最終操作: ${c.history[0].time} ${c.history[0].action}`
+                      : "履歴なし（初期状態）"}
+                  </small>
+                </div>
+                <div style={{display: "flex", gap: "6px"}} onClick={e=>e.stopPropagation()}>
+                  {c.status === "保管中" ? (
+                    <button className="primary small" onClick={async ()=>{
+                      if (!window.confirm(`「${c.name}」の台車を借りますか？`)) return;
+                      const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                      await updateCartRecord({
+                        ...c,
+                        status: "貸出中",
+                        holder: "ログインユーザー",
+                        history: [{time: nowStr, action: "借りる", user: "ログインユーザー"}, ...(c.history || [])]
+                      });
+                    }}>借りる</button>
+                  ) : (
+                    <>
+                      <button className="secondary small" style={{border: "1px solid #dfe5ec", background: "white", borderRadius: "8px", padding: "8px 10px", fontSize: "11px", fontWeight: 700, cursor: "pointer"}} onClick={async ()=>{
+                        if (!window.confirm(`「${c.name}」の台車を引き継ぎますか？`)) return;
+                        const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                        await updateCartRecord({
+                          ...c,
+                          status: "貸出中",
+                          holder: "ログインユーザー",
+                          history: [{time: nowStr, action: "引き継ぐ", user: "ログインユーザー"}, ...(c.history || [])]
+                        });
+                      }}>引き継ぐ</button>
+                      <button className="primary small" style={{background: "#2b6843"}} onClick={async ()=>{
+                        if (!window.confirm(`「${c.name}」の台車を返却しますか？`)) return;
+                        const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+                        const cat = c.category || inferCartCategory(c.name);
+                        const defaultReturnLocation = c.location || defaultLocationForCategory(cat);
+                        await updateCartRecord({
+                          ...c,
+                          status: "保管中",
+                          holder: "-",
+                          location: defaultReturnLocation,
+                          history: [{time: nowStr, action: "返す", user: "ログインユーザー"}, ...(c.history || [])]
+                        });
+                      }}>返す</button>
+                    </>
+                  )}
+                </div>
+              </div>)}
+            </div>
+          </>
+        )}
       </section>}
 
       {page !== "home" && page !== "calendar" && page !== "documents" && page !== "admin" && page !== "admin-members" && page !== "admin-structure" && page !== "admin-permissions" && page !== "keys" && page !== "carts" && <section className="page">
@@ -1666,7 +1807,7 @@ export default function App() {
                 <strong>{c.name}</strong>
                 <span style={{fontSize: "12px", color: "#a34343", fontWeight: 700}}>貸出中</span>
               </div>
-              <small>使用者: <strong>{c.holder}</strong></small>
+              <small>種類: {c.category || inferCartCategory(c.name)} ・ 使用者: <strong>{c.holder}</strong></small>
               {c.history && c.history.length > 0 && (
                 <small style={{color: "#555"}}>直近の操作: {c.history[0].time} {c.history[0].action}</small>
               )}
@@ -1686,7 +1827,8 @@ export default function App() {
 
       {!isEditingCart ? (
         <div className="notice-card" style={{margin: "12px 0"}}>
-          <p style={{margin: 0}}>状態: <strong style={{color: selectedCartDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedCartDetail.status}</strong></p>
+          <p style={{margin: 0}}>種類（タブ）: <strong>{selectedCartDetail.category || inferCartCategory(selectedCartDetail.name)}</strong></p>
+          <p style={{margin: "4px 0 0"}}>状態: <strong style={{color: selectedCartDetail.status === "保管中" ? "#2b6843" : "#a34343"}}>{selectedCartDetail.status}</strong></p>
           <p style={{margin: "4px 0 0"}}>使用者 / 保管場所: <strong>{selectedCartDetail.status === "貸出中" ? selectedCartDetail.holder : selectedCartDetail.location}</strong></p>
           <div style={{marginTop: "10px"}}>
             <button
@@ -1695,6 +1837,7 @@ export default function App() {
               style={{border: "1px solid #dfe5ec", background: "#fff", borderRadius: "8px", padding: "6px 10px", fontSize: "12px", fontWeight: 700, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"}}
               onClick={()=>{
                 setCartEditForm({
+                  category: selectedCartDetail.category || inferCartCategory(selectedCartDetail.name),
                   name: selectedCartDetail.name || "",
                   location: selectedCartDetail.location || ""
                 });
@@ -1707,7 +1850,15 @@ export default function App() {
         </div>
       ) : (
         <div className="notice-card" style={{margin: "12px 0"}}>
-          <label className="field-label" style={{marginTop: 0}}>台車の名前・番号
+          <label className="field-label" style={{marginTop: 0}}>種類（タブ）
+            <select
+              value={cartEditForm.category}
+              onChange={e=>setCartEditForm(v=>({...v, category: e.target.value}))}
+            >
+              {allCartTabs.map(tab => <option key={tab} value={tab}>{tab}</option>)}
+            </select>
+          </label>
+          <label className="field-label">台車の名前・番号
             <input
               value={cartEditForm.name}
               onChange={e=>setCartEditForm(v=>({...v, name: e.target.value}))}
@@ -1766,34 +1917,131 @@ export default function App() {
       <button className="primary full" style={{marginTop: "16px"}} onClick={closeCartDetailModal}>閉じる</button>
     </div></div>}
 
-    {/* 新しい台車を追加モーダル */}
+    {/* ＋ 追加モーダル（台車 または タブを選択して追加） */}
     {showCartAddModal && <div className="modal-backdrop" onClick={()=>setShowCartAddModal(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
       <div className="modal-head">
-        <h2>新しい台車を追加</h2>
+        <h2>追加</h2>
         <button className="icon-button" onClick={()=>setShowCartAddModal(false)}><X/></button>
       </div>
-      <label className="field-label">台車の名前・番号<input value={newCartName} onChange={e=>setNewCartName(e.target.value)} placeholder="例：火器台車 13 / 雄飛台車 4"/></label>
-      <label className="field-label">保管場所<input value={newCartLocation} onChange={e=>setNewCartLocation(e.target.value)} placeholder="例：雄飛室 / 4棟前 / 学セン階段下"/></label>
-      <button className="primary full" disabled={!newCartName.trim()} onClick={async ()=>{
-        const name = newCartName.trim();
-        const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
-        const newCart = {
-          id: Date.now(),
-          name,
-          status: "保管中",
-          holder: "-",
-          location: newCartLocation.trim() || "雄飛室",
-          history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
-        };
-        setCarts(prev => [newCart, ...prev]);
-        if (supabase) {
-          await supabase.from("carts").insert(newCart);
-        }
-        setNewCartName("");
-        setNewCartLocation("雄飛室");
-        setShowCartAddModal(false);
-        alert("保存しました。");
-      }}>登録</button>
+
+      {/* 追加対象（台車 / タブ）の切り替え */}
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px"}}>
+        <button
+          type="button"
+          onClick={()=>setAddModalMode("cart")}
+          style={{
+            padding: "10px",
+            borderRadius: "10px",
+            border: addModalMode === "cart" ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+            background: addModalMode === "cart" ? "#203d64" : "#ffffff",
+            color: addModalMode === "cart" ? "#ffffff" : "#1e293b",
+            fontWeight: 700,
+            fontSize: "13px",
+            cursor: "pointer"
+          }}
+        >
+          台車を追加
+        </button>
+        <button
+          type="button"
+          onClick={()=>setAddModalMode("tab")}
+          style={{
+            padding: "10px",
+            borderRadius: "10px",
+            border: addModalMode === "tab" ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+            background: addModalMode === "tab" ? "#203d64" : "#ffffff",
+            color: addModalMode === "tab" ? "#ffffff" : "#1e293b",
+            fontWeight: 700,
+            fontSize: "13px",
+            cursor: "pointer"
+          }}
+        >
+          タブを追加
+        </button>
+      </div>
+
+      {addModalMode === "cart" ? (
+        <>
+          <label className="field-label">種類（タブ）
+            <select
+              value={newCartCategory}
+              onChange={e => {
+                const cat = e.target.value;
+                setNewCartCategory(cat);
+                setNewCartLocation(defaultLocationForCategory(cat));
+              }}
+            >
+              {allCartTabs.map(tab => <option key={tab} value={tab}>{tab}</option>)}
+            </select>
+          </label>
+          <label className="field-label">台車の名前・番号
+            <input
+              value={newCartName}
+              onChange={e=>setNewCartName(e.target.value)}
+              placeholder="例：学友会台車 5 / ダスキン台車 23"
+            />
+          </label>
+          <label className="field-label">保管場所
+            <input
+              value={newCartLocation}
+              onChange={e=>setNewCartLocation(e.target.value)}
+              placeholder="例：雄飛室 / 4棟前 / 学セン階段下"
+            />
+          </label>
+          <button
+            className="primary full"
+            disabled={!newCartName.trim()}
+            onClick={async ()=>{
+              const name = newCartName.trim();
+              const cat = newCartCategory || "雄飛台車";
+              const nowStr = new Date().toLocaleString("ja-JP", {month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"});
+              const newCart = {
+                id: Date.now(),
+                category: cat,
+                name,
+                status: "保管中",
+                holder: "-",
+                location: newCartLocation.trim() || defaultLocationForCategory(cat),
+                history: [{time: nowStr, action: "登録", user: "ログインユーザー"}]
+              };
+              setCarts(prev => [newCart, ...prev]);
+              if (supabase) {
+                await supabase.from("carts").insert(newCart);
+              }
+              setActiveCartTab(cat);
+              setNewCartName("");
+              setShowCartAddModal(false);
+              alert("台車を登録しました。");
+            }}
+          >
+            台車を登録
+          </button>
+        </>
+      ) : (
+        <>
+          <label className="field-label">新しいタブ名（種類名）
+            <input
+              value={newTabName}
+              onChange={e=>setNewTabName(e.target.value)}
+              placeholder="例：火器台車 / ステージ用台車"
+            />
+          </label>
+          <button
+            className="primary full"
+            disabled={!newTabName.trim() || allCartTabs.includes(newTabName.trim())}
+            onClick={()=>{
+              const tabName = newTabName.trim();
+              setCartCategories(prev => Array.from(new Set([...prev, tabName])));
+              setActiveCartTab(tabName);
+              setNewTabName("");
+              setShowCartAddModal(false);
+              alert(`タブ「${tabName}」を追加しました。`);
+            }}
+          >
+            タブを登録
+          </button>
+        </>
+      )}
     </div></div>}
   </div>;
 }
