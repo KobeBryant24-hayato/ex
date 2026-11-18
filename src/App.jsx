@@ -266,13 +266,16 @@ const toNoticeRow = n => ({
   targets: Array.isArray(n.targets) && n.targets.length > 0 ? n.targets : ["全体公開"], created_at: n.createdAt
 });
 const mapLostItemRow = row => ({
-  id: row.id, name: row.name || "", foundLocation: row.found_location || "", foundTime: row.found_time || "",
+  id: row.id, name: row.name || "", foundLocation: row.found_location || "",
+  foundDate: row.found_date || formatDateKey(new Date(row.created_at || Date.now())),
+  foundTime: row.found_time || "", timeUnknown: row.found_time === "時間不明" || row.found_time === "",
   finder: row.finder || CURRENT_USER_NAME, storageType: row.storage_type || "警備本部",
   storageOther: row.storage_other || "", comment: row.comment || "", status: row.status || "保管中",
   photos: Array.isArray(row.photos) ? row.photos : [], createdAt: row.created_at || new Date().toISOString()
 });
 const toLostItemRow = item => ({
-  id: item.id, name: item.name, found_location: item.foundLocation || "", found_time: item.foundTime || "",
+  id: item.id, name: item.name, found_location: item.foundLocation || "",
+  found_time: item.timeUnknown ? "時間不明" : (item.foundTime || ""),
   finder: item.finder || CURRENT_USER_NAME, storage_type: item.storageType || "警備本部",
   storage_other: item.storageOther || "", comment: item.comment || "", status: item.status || "保管中",
   photos: Array.isArray(item.photos) ? item.photos : [], created_at: item.createdAt
@@ -339,8 +342,9 @@ export default function App() {
   const [editingLostItem, setEditingLostItem] = useState(null);
   const [savingLostItem, setSavingLostItem] = useState(false);
   const [lostForm, setLostForm] = useState({
-    name: "", foundLocation: "", foundTime: formatNowTimeInput(), finder: CURRENT_USER_NAME,
-    storageType: "警備本部", storageOther: "", comment: "", existingPhotos: [], newFiles: [], newPreviews: []
+    name: "", foundLocation: "", foundDate: todayKey, foundTime: formatNowTimeInput(), timeUnknown: false,
+    finder: CURRENT_USER_NAME, storageType: "警備本部", storageOther: "", comment: "",
+    existingPhotos: [], newFiles: [], newPreviews: []
   });
 
   const [currentMonth, setCurrentMonth] = useState(new Date(todayObj.getFullYear(), todayObj.getMonth(), 1));
@@ -540,18 +544,33 @@ export default function App() {
   }, [events, todayKey]);
 
   function openNewLostModal() {
+    setSelectedLostDetail(null);
     setEditingLostItem(null);
-    setLostForm({ name: "", foundLocation: "", foundTime: formatNowTimeInput(), finder: CURRENT_USER_NAME, storageType: "警備本部", storageOther: "", comment: "", existingPhotos: [], newFiles: [], newPreviews: [] });
+    setLostForm({
+      name: "", foundLocation: "", foundDate: todayKey, foundTime: formatNowTimeInput(), timeUnknown: false,
+      finder: CURRENT_USER_NAME, storageType: "警備本部", storageOther: "", comment: "",
+      existingPhotos: [], newFiles: [], newPreviews: []
+    });
     setShowLostFormModal(true);
   }
 
   function openEditLostModal(item) {
+    setSelectedLostDetail(null);
     setEditingLostItem(item);
+    const isUnknown = item.timeUnknown === true || item.foundTime === "時間不明" || item.foundTime === "";
     setLostForm({
-      name: item.name || "", foundLocation: item.foundLocation || "", foundTime: item.foundTime || "",
-      finder: item.finder || CURRENT_USER_NAME, storageType: item.storageType || "警備本部",
-      storageOther: item.storageOther || "", comment: item.comment || "",
-      existingPhotos: Array.isArray(item.photos) ? [...item.photos] : [], newFiles: [], newPreviews: []
+      name: item.name || "",
+      foundLocation: item.foundLocation || "",
+      foundDate: item.foundDate || formatDateKey(new Date(item.createdAt || Date.now())),
+      foundTime: isUnknown ? "" : item.foundTime,
+      timeUnknown: isUnknown,
+      finder: item.finder || CURRENT_USER_NAME,
+      storageType: item.storageType || "警備本部",
+      storageOther: item.storageOther || "",
+      comment: item.comment || "",
+      existingPhotos: Array.isArray(item.photos) ? [...item.photos] : [],
+      newFiles: [],
+      newPreviews: []
     });
     setShowLostFormModal(true);
   }
@@ -594,15 +613,22 @@ export default function App() {
         }
       }
       const record = {
-        id: itemId, name: lostForm.name.trim(), foundLocation: lostForm.foundLocation.trim(),
-        foundTime: lostForm.foundTime.trim(), finder: lostForm.finder.trim() || CURRENT_USER_NAME,
-        storageType: lostForm.storageType, storageOther: lostForm.storageType === "その他" ? lostForm.storageOther.trim() : "",
-        comment: lostForm.comment.trim(), status: editingLostItem ? editingLostItem.status : "保管中",
-        photos: [...lostForm.existingPhotos, ...uploadedUrls], createdAt: originalCreatedAt
+        id: itemId,
+        name: lostForm.name.trim(),
+        foundLocation: lostForm.foundLocation.trim(),
+        foundDate: lostForm.foundDate || todayKey,
+        foundTime: lostForm.timeUnknown ? "時間不明" : (lostForm.foundTime || "時間不明"),
+        timeUnknown: !!lostForm.timeUnknown,
+        finder: lostForm.finder.trim() || CURRENT_USER_NAME,
+        storageType: lostForm.storageType,
+        storageOther: lostForm.storageType === "その他" ? lostForm.storageOther.trim() : "",
+        comment: lostForm.comment.trim(),
+        status: editingLostItem ? editingLostItem.status : "保管中",
+        photos: [...lostForm.existingPhotos, ...uploadedUrls],
+        createdAt: originalCreatedAt
       };
       if (editingLostItem) {
         setLostItems(prev => prev.map(it => it.id === itemId ? record : it));
-        if (selectedLostDetail?.id === itemId) setSelectedLostDetail(record);
       } else {
         setLostItems(prev => [record, ...prev]);
       }
@@ -633,6 +659,12 @@ export default function App() {
 
   const renderStorageLabel = item =>
     item.storageType === "その他" ? (item.storageOther ? `その他（${item.storageOther}）` : "その他") : (item.storageType || "警備本部");
+
+  const renderFoundDateTimeLabel = item => {
+    const dStr = item.foundDate || "";
+    const tStr = item.timeUnknown || item.foundTime === "時間不明" || !item.foundTime ? "時間不明" : item.foundTime;
+    return [dStr, tStr].filter(Boolean).join(" ") || "未記入";
+  };
 
   function openNoticeAddModal() {
     setNoticeForm({ title: "", body: "", targets: ["全体公開"] });
@@ -893,12 +925,16 @@ export default function App() {
     setShowCartAddModal(true);
   }
 
+  // 1列目: カレンダー, お知らせ / 2列目: 鍵管理, 台車管理 / 3列目: 資料共有, 落とし物 / 4列目: 問い合わせ, 管理者設定
   const menuItems = [
     [CalendarDays, "カレンダー", "calendar"],
     [Megaphone, "お知らせ", "notices"],
-    [FolderOpen, "資料共有", "documents"],
+    [KeyRound, "鍵管理", "keys"],
     [Truck, "台車管理", "carts"],
-    [KeyRound, "鍵管理", "keys"]
+    [FolderOpen, "資料共有", "documents"],
+    [Search, "落とし物", "lost"],
+    [MessageCircle, "問い合わせ", "inquiry"],
+    [Settings, "管理者設定", "admin"]
   ];
 
   const availableTeamsForScope = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
@@ -946,9 +982,6 @@ export default function App() {
         <h3 className="menu-title">メニュー</h3>
         <div className="menu-grid">
           {menuItems.map(([Icon,label,key]) => <button className="menu-tile" key={key} onClick={()=>setPage(key)}><Icon/><span>{label}</span></button>)}
-          <button className="menu-tile" onClick={()=>setPage("lost")}><Search/><span>落とし物</span></button>
-          <button className="menu-tile" onClick={()=>setPage("inquiry")}><MessageCircle/><span>問い合わせ</span></button>
-          <button className="menu-tile" onClick={()=>setPage("admin")}><Settings/><span>管理者設定</span></button>
         </div>
       </section>}
 
@@ -971,6 +1004,11 @@ export default function App() {
               onChange={e=>setLostSearchQuery(e.target.value)}
               placeholder={lostSearchField === "location" ? "場所で検索（例：中央棟、4棟）" : "落とし物の名前で検索（例：傘、財布）"}
             />
+            {lostSearchQuery && (
+              <button type="button" aria-label="検索をクリア" onClick={()=>setLostSearchQuery("")} style={{background: "none", border: "none", padding: "2px", cursor: "pointer", color: "#64748b", display: "inline-flex", alignItems: "center"}}>
+                <X size={16}/>
+              </button>
+            )}
           </div>
           <div style={{display: "inline-flex", background: "#eef2f6", padding: "3px", borderRadius: "9px", gap: "2px", flexShrink: 0}}>
             {[{ id: "name", label: "名前" }, { id: "location", label: "場所" }].map(opt => {
@@ -1068,7 +1106,7 @@ export default function App() {
                         <strong style={{fontSize: "15px"}}>{item.name}</strong>
                         <span style={{fontSize: "11px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px", background: isReturned ? "#2b6843" : "#fef3c7", color: isReturned ? "#ffffff" : "#92400e"}}>{item.status}</span>
                       </div>
-                      <small style={{marginTop: "3px"}}>場所: {item.foundLocation || "未記入"} ／ 時間: {item.foundTime || "未記入"}</small>
+                      <small style={{marginTop: "3px"}}>場所: {item.foundLocation || "未記入"} ／ 日時: {renderFoundDateTimeLabel(item)}</small>
                       <small>発見者: {item.finder} ／ 保管場所: <strong>{renderStorageLabel(item)}</strong></small>
                       {item.comment && <small className="file-note">{item.comment}</small>}
                     </div>
@@ -1347,7 +1385,15 @@ export default function App() {
           <div><h2>鍵一覧</h2><small>{keys.filter(k => k.name.toLowerCase().includes(keySearch.toLowerCase())).length}件の鍵</small></div>
           <button className="primary small" onClick={()=>setShowKeyAddModal(true)}><Plus size={16}/> 鍵を追加</button>
         </div>
-        <div className="searchbox"><Search size={18}/><input value={keySearch} onChange={e=>setKeySearch(e.target.value)} placeholder="鍵の名前で検索"/></div>
+        <div className="searchbox">
+          <Search size={18}/>
+          <input value={keySearch} onChange={e=>setKeySearch(e.target.value)} placeholder="鍵の名前で検索"/>
+          {keySearch && (
+            <button type="button" aria-label="検索文字を消す" onClick={()=>setKeySearch("")} style={{background: "none", border: "none", padding: "2px", cursor: "pointer", color: "#64748b", display: "inline-flex", alignItems: "center"}}>
+              <X size={16}/>
+            </button>
+          )}
+        </div>
         <div className="file-list">
           {keys.filter(k => k.name.toLowerCase().includes(keySearch.toLowerCase())).map(k => <div className="file-row" key={k.id} style={{alignItems: "center", cursor: "pointer"}} onClick={()=>openKeyDetailModal(k)}>
             <div className="file-icon"><KeyRound/></div>
@@ -1487,10 +1533,43 @@ export default function App() {
         <button className="icon-button" onClick={()=>{setShowLostFormModal(false);setEditingLostItem(null);}}><X/></button>
       </div>
       <label className="field-label">落とし物の名前<input value={lostForm.name} onChange={e=>setLostForm(v=>({...v, name: e.target.value}))} placeholder="例：黒色の折りたたみ傘 / AirPodsケース"/></label>
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px"}}>
-        <label className="field-label">拾得場所<input value={lostForm.foundLocation} onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))} placeholder="例：中央棟 1F トイレ前"/></label>
-        <label className="field-label">時間<input type="time" value={lostForm.foundTime} onChange={e=>setLostForm(v=>({...v, foundTime: e.target.value}))}/></label>
+
+      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px"}}>
+        <label className="field-label" style={{marginTop: 0}}>拾得場所<input value={lostForm.foundLocation} onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))} placeholder="例：中央棟 1F"/></label>
+        <label className="field-label" style={{marginTop: 0}}>日付<input type="date" value={lostForm.foundDate} onChange={e=>setLostForm(v=>({...v, foundDate: e.target.value}))}/></label>
       </div>
+
+      <div style={{display: "grid", gridTemplateColumns: "1fr auto", gap: "8px", alignItems: "end", marginTop: "10px"}}>
+        <label className="field-label" style={{marginTop: 0}}>
+          時間
+          <input
+            type="time"
+            disabled={lostForm.timeUnknown}
+            value={lostForm.timeUnknown ? "" : lostForm.foundTime}
+            onChange={e=>setLostForm(v=>({...v, foundTime: e.target.value, timeUnknown: false}))}
+            style={{background: lostForm.timeUnknown ? "#f1f5f9" : "#ffffff"}}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={()=>setLostForm(v=>({...v, timeUnknown: !v.timeUnknown, foundTime: !v.timeUnknown ? "" : (v.foundTime || formatNowTimeInput())}))}
+          style={{
+            height: "42px",
+            padding: "0 12px",
+            borderRadius: "10px",
+            border: lostForm.timeUnknown ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+            background: lostForm.timeUnknown ? "#203d64" : "#ffffff",
+            color: lostForm.timeUnknown ? "#ffffff" : "#334155",
+            fontWeight: 700,
+            fontSize: "12px",
+            cursor: "pointer",
+            whiteSpace: "nowrap"
+          }}
+        >
+          時間不明
+        </button>
+      </div>
+
       <label className="field-label">発見者名（ログイン名自動反映）<input value={lostForm.finder} onChange={e=>setLostForm(v=>({...v, finder: e.target.value}))} placeholder="発見者名"/></label>
       <div className="field-label" style={{marginTop: "10px"}}>
         <span>保管場所</span>
@@ -1556,7 +1635,8 @@ export default function App() {
       ) : <div className="empty" style={{margin: "12px 0"}}>写真は登録されていません。</div>}
       <div className="notice-card" style={{margin: "10px 0"}}>
         <p style={{margin: "0 0 6px"}}><strong>拾得場所:</strong> {selectedLostDetail.foundLocation || "未記入"}</p>
-        <p style={{margin: "0 0 6px"}}><strong>時間:</strong> {selectedLostDetail.foundTime || "未記入"}</p>
+        <p style={{margin: "0 0 6px"}}><strong>日付:</strong> {selectedLostDetail.foundDate || "未記入"}</p>
+        <p style={{margin: "0 0 6px"}}><strong>時間:</strong> {selectedLostDetail.timeUnknown || selectedLostDetail.foundTime === "時間不明" || !selectedLostDetail.foundTime ? "時間不明" : selectedLostDetail.foundTime}</p>
         <p style={{margin: "0 0 6px"}}><strong>発見者名:</strong> {selectedLostDetail.finder}</p>
         <p style={{margin: "0 0 6px"}}><strong>保管場所:</strong> {renderStorageLabel(selectedLostDetail)}</p>
         <p style={{margin: "0 0 6px"}}><strong>初回登録日時:</strong> {formatPostedDateTime(selectedLostDetail.createdAt)}</p>
