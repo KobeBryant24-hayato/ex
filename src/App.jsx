@@ -953,6 +953,7 @@ export default function App() {
     minWidth: 0,
     maxWidth: "100%",
     height: "42px",
+    lineHeight: "40px",
     padding: "0 10px",
     margin: 0,
     borderRadius: "10px",
@@ -961,10 +962,23 @@ export default function App() {
     boxSizing: "border-box",
     WebkitAppearance: "none",
     appearance: "none",
-    display: "block"
+    display: "flex",
+    alignItems: "center"
   };
 
   return <div className="app-shell">
+    <style>{`
+      input[type="date"]::-webkit-datetime-edit,
+      input[type="time"]::-webkit-datetime-edit,
+      input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+      input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+        padding: 0;
+        line-height: 1.2;
+        display: inline-flex;
+        align-items: center;
+      }
+    `}</style>
+
     <header className="topbar">
       <button type="button" className="brand-home-button" onClick={() => { setPage("home"); setSelected(null); closeKeyDetailModal(); closeCartDetailModal(); setSelectedLostDetail(null); }} aria-label="ホームへ戻る">
         <img src="/image.png" alt="ゆーぺいくん" className="brand-mascot" />
@@ -1597,13 +1611,12 @@ export default function App() {
             onClick={()=>setLostForm(v=>({...v, timeUnknown: !v.timeUnknown, foundTime: !v.timeUnknown ? "" : (v.foundTime || formatNowTimeInput())}))}
             style={{
               ...uniformControlStyle,
+              lineHeight: 1.2,
               border: lostForm.timeUnknown ? "1.5px solid #203d64" : "1px solid #dfe5ec",
               background: lostForm.timeUnknown ? "#203d64" : "#ffffff",
               color: lostForm.timeUnknown ? "#ffffff" : "#334155",
               fontWeight: 700,
               cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
               justifyContent: "center"
             }}
           >
