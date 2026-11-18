@@ -939,14 +939,29 @@ export default function App() {
   const availableTeamsForScope = scope !== "全体公開" ? (teamsByDepartment[scope] || []) : [];
   const availableTeamsForEvent = eventForm.scope !== "全体公開" ? (teamsByDepartment[eventForm.scope] || []) : [];
 
-  const uniformFieldStyle = {
+  const uniformCellStyle = {
+    minWidth: 0,
     width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+    margin: 0
+  };
+
+  const uniformControlStyle = {
+    width: "100%",
+    minWidth: 0,
+    maxWidth: "100%",
     height: "42px",
     padding: "0 10px",
+    margin: 0,
     borderRadius: "10px",
     border: "1px solid #dfe5ec",
     fontSize: "13px",
-    boxSizing: "border-box"
+    boxSizing: "border-box",
+    WebkitAppearance: "none",
+    appearance: "none",
+    display: "block"
   };
 
   return <div className="app-shell">
@@ -1543,61 +1558,64 @@ export default function App() {
       </div>
       <label className="field-label">落とし物の名前<input value={lostForm.name} onChange={e=>setLostForm(v=>({...v, name: e.target.value}))} placeholder="例：黒色の折りたたみ傘 / AirPodsケース"/></label>
 
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "10px"}}>
-        <label className="field-label" style={{marginTop: 0}}>
-          拾得場所
+      <div style={{display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "10px", marginTop: "10px", alignItems: "end"}}>
+        <label className="field-label" style={uniformCellStyle}>
+          <span>拾得場所</span>
           <input
-            style={uniformFieldStyle}
+            style={uniformControlStyle}
             value={lostForm.foundLocation}
             onChange={e=>setLostForm(v=>({...v, foundLocation: e.target.value}))}
             placeholder="例：中央棟 1F"
           />
         </label>
-        <label className="field-label" style={{marginTop: 0}}>
-          日付
+
+        <label className="field-label" style={uniformCellStyle}>
+          <span>日付</span>
           <input
             type="date"
-            style={uniformFieldStyle}
+            style={uniformControlStyle}
             value={lostForm.foundDate}
             onChange={e=>setLostForm(v=>({...v, foundDate: e.target.value}))}
           />
         </label>
-      </div>
 
-      <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", alignItems: "end", marginTop: "10px"}}>
-        <label className="field-label" style={{marginTop: 0}}>
-          時間
+        <label className="field-label" style={uniformCellStyle}>
+          <span>時間</span>
           <input
             type="time"
             disabled={lostForm.timeUnknown}
             value={lostForm.timeUnknown ? "" : lostForm.foundTime}
             onChange={e=>setLostForm(v=>({...v, foundTime: e.target.value, timeUnknown: false}))}
-            style={{...uniformFieldStyle, background: lostForm.timeUnknown ? "#f1f5f9" : "#ffffff"}}
+            style={{...uniformControlStyle, background: lostForm.timeUnknown ? "#f1f5f9" : "#ffffff"}}
           />
         </label>
-        <button
-          type="button"
-          onClick={()=>setLostForm(v=>({...v, timeUnknown: !v.timeUnknown, foundTime: !v.timeUnknown ? "" : (v.foundTime || formatNowTimeInput())}))}
-          style={{
-            ...uniformFieldStyle,
-            border: lostForm.timeUnknown ? "1.5px solid #203d64" : "1px solid #dfe5ec",
-            background: lostForm.timeUnknown ? "#203d64" : "#ffffff",
-            color: lostForm.timeUnknown ? "#ffffff" : "#334155",
-            fontWeight: 700,
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          時間不明
-        </button>
+
+        <div style={uniformCellStyle}>
+          <span style={{visibility: "hidden", userSelect: "none"}}>時間不明</span>
+          <button
+            type="button"
+            onClick={()=>setLostForm(v=>({...v, timeUnknown: !v.timeUnknown, foundTime: !v.timeUnknown ? "" : (v.foundTime || formatNowTimeInput())}))}
+            style={{
+              ...uniformControlStyle,
+              border: lostForm.timeUnknown ? "1.5px solid #203d64" : "1px solid #dfe5ec",
+              background: lostForm.timeUnknown ? "#203d64" : "#ffffff",
+              color: lostForm.timeUnknown ? "#ffffff" : "#334155",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }}
+          >
+            時間不明
+          </button>
+        </div>
       </div>
 
       <label className="field-label">発見者名（ログイン名自動反映）<input value={lostForm.finder} onChange={e=>setLostForm(v=>({...v, finder: e.target.value}))} placeholder="発見者名"/></label>
       <div className="field-label" style={{marginTop: "10px"}}>
         <span>保管場所</span>
-        <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "6px"}}>
+        <div style={{display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: "8px", marginTop: "6px"}}>
           {["警備本部", "その他"].map(opt => {
             const active = lostForm.storageType === opt;
             return (
