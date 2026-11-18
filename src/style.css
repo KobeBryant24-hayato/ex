@@ -176,3 +176,12 @@ h3{font-size:15px;margin:0}
   .category-grid{gap:12px}
   .department-tile{min-height:65px}
 }
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+}
